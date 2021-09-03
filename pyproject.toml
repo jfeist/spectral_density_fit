@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "spectral_density_fit"
+version = "0.1.0"
+description = ""
+authors = ["Johannes Feist <johannes.feist@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+jax = "^0.2.19"
+nlopt = "^2.7.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
