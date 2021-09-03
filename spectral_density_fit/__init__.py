@@ -95,7 +95,7 @@ def Jmod(ω,Heff,g):
 
 # version that allows to pass "templates" for H and g that
 # indicate where they are allowed to be nonzero in the fit
-def make_objfun_shaped(ω,J,Htmpl,gtmpl,λlims=None):
+def make_objfun_shaped(ω,J,Htmpl,gtmpl,λlims=None,fitlog=False):
     Ne, Nm = gtmpl.shape
     assert Htmpl.shape == (Nm,Nm)
 
@@ -135,7 +135,10 @@ def make_objfun_shaped(ω,J,Htmpl,gtmpl,λlims=None):
     @jit
     def err(ps):
         Jf = Jfun(ω,ps)
-        return jnp.linalg.norm(Jf-J)
+        if fitlog:
+            return jnp.linalg.norm(jnp.log(Jf)-jnp.log(J))
+        else:
+            return jnp.linalg.norm(Jf-J)
 
     grad_err = jit(grad(err))
 
@@ -172,9 +175,9 @@ def make_objfun_shaped(ω,J,Htmpl,gtmpl,λlims=None):
     
     return opt
 
-def make_objfun(ω,J,Nm,λlims=None):
+def make_objfun(ω,J,Nm,λlims=None,fitlog=False):
     Ne = jnp.asarray(J).shape[-1]
     Htmpl = jnp.ones((Nm,Nm))
     gtmpl = jnp.ones((Ne,Nm))
-    return make_objfun_shaped(ω, J, Htmpl, gtmpl, λlims)
+    return make_objfun_shaped(ω, J, Htmpl, gtmpl, λlims, fitlog)
 
