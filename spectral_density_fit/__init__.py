@@ -129,10 +129,7 @@ def make_objfun_shaped(ω,J,Htmpl,gtmpl,λlims=None):
     def Jfun(ω,ps):
         H,κ,g = ps_to_Hκg(ps)
         Heff = H-0.5j*jnp.diag(κ)
-        if custjvp:
-            JJ = Jmod(ω,Heff,g)
-        else:
-            JJ = Jmod_naive(ω,Heff,g)
+        JJ = Jmod(ω,Heff,g)
         return JJ
 
     @jit
