@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "spectral_density_fit"
 version = "0.1.0"
-description = ""
+description = "Fit arbitrary spectral densities with a few-mode model"
 authors = ["Johannes Feist <johannes.feist@gmail.com>"]
 
 [tool.poetry.dependencies]
