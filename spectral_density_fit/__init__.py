@@ -10,6 +10,7 @@ __version__ = '0.1.0'
 from jax.config import config
 config.update("jax_enable_x64", True)
 config.update("jax_platform_name", "cpu")
+# config.update("jax_debug_nans", True)
 
 import jax
 import jax.numpy as jnp
@@ -112,7 +113,6 @@ def make_objfun_shaped(ω,J,Htmpl,gtmpl,λlims=None,fitlog=False):
     
     tmpH = jnp.zeros((Nm,Nm))
     tmpg = jnp.zeros((Ne,Nm))
-    λmin,λmax = (ω[0],ω[-1]) if λlims is None else λlims
 
     def Hκg_to_ps(H,κ,g):
         return jnp.hstack((g[g_inds],κ,H[H_inds]))
@@ -136,7 +136,7 @@ def make_objfun_shaped(ω,J,Htmpl,gtmpl,λlims=None,fitlog=False):
     def err(ps):
         Jf = Jfun(ω,ps)
         if fitlog:
-            return jnp.linalg.norm(jnp.log(Jf)-jnp.log(J))
+            return jnp.linalg.norm(jnp.log(Jf) - jnp.log(J))
         else:
             return jnp.linalg.norm(Jf-J)
 
@@ -164,8 +164,16 @@ def make_objfun_shaped(ω,J,Htmpl,gtmpl,λlims=None,fitlog=False):
 
     opt = nlopt.opt(nlopt.LD_MMA,Nps)
     opt.set_min_objective(nlopt_f)
-    opt.add_inequality_mconstraint(nlopt_constraints, np.zeros(2*Nm))
     opt.set_ftol_rel(1e-5)
+
+    # kappas have to be non-negative
+    lb = opt.get_lower_bounds()
+    lb[Nps_g:Nps_g+Nm] = 0.
+    opt.set_lower_bounds(lb)
+
+    if λlims is not False:
+        λmin, λmax = (ω[0],ω[-1]) if λlims is None else λlims
+        opt.add_inequality_mconstraint(nlopt_constraints, np.zeros(2*Nm))
     
     # add members to opt to have everything in a single object
     opt.Hκg_to_ps = Hκg_to_ps
@@ -180,4 +188,3 @@ def make_objfun(ω,J,Nm,λlims=None,fitlog=False):
     Htmpl = jnp.ones((Nm,Nm))
     gtmpl = jnp.ones((Ne,Nm))
     return make_objfun_shaped(ω, J, Htmpl, gtmpl, λlims, fitlog)
-
