@@ -6,6 +6,7 @@ https://doi.org/10.1103/PhysRevLett.126.093601
 """
 
 __version__ = '0.1.0'
+__all__ = ["spectral_density_fitter"]
 
 from jax.config import config
 config.update("jax_enable_x64", True)
@@ -96,7 +97,7 @@ def Jmod(ω,Heff,g):
 
 # version that allows to pass "templates" for H and g that
 # indicate where they are allowed to be nonzero in the fit
-def make_objfun(ω,J,Hgtmpl,λlims=None,fitlog=False):
+def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     J = jnp.array(J)
     if J.ndim == 1:
         J = J[:,None,None]
