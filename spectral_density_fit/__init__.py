@@ -96,11 +96,21 @@ def Jmod(ω,Heff,g):
 
 # version that allows to pass "templates" for H and g that
 # indicate where they are allowed to be nonzero in the fit
-def make_objfun_shaped(ω,J,Htmpl,gtmpl,λlims=None,fitlog=False):
-    Ne, Nm = gtmpl.shape
-    assert Htmpl.shape == (Nm,Nm)
-
+def make_objfun(ω,J,Hgtmpl,λlims=None,fitlog=False):
     J = jnp.array(J)
+    if J.ndim == 1:
+        J = J[:,None,None]
+
+    if isinstance(Hgtmpl,tuple):
+        Htmpl, gtmpl = Hgtmpl
+        Ne, Nm = gtmpl.shape
+        assert Htmpl.shape == (Nm,Nm)
+    else:
+        Nm = int(Hgtmpl)
+        Ne = J.shape[-1]
+        Htmpl = jnp.ones((Nm,Nm))
+        gtmpl = jnp.ones((Ne,Nm))
+
     assert J.shape == (len(ω),Ne,Ne)
     
     # get the indices of the nonzero entries in the upper triangle of Htmpl
@@ -182,9 +192,3 @@ def make_objfun_shaped(ω,J,Htmpl,gtmpl,λlims=None,fitlog=False):
     opt.obj_fun = nlopt_f
     
     return opt
-
-def make_objfun(ω,J,Nm,λlims=None,fitlog=False):
-    Ne = jnp.asarray(J).shape[-1]
-    Htmpl = jnp.ones((Nm,Nm))
-    gtmpl = jnp.ones((Ne,Nm))
-    return make_objfun_shaped(ω, J, Htmpl, gtmpl, λlims, fitlog)
