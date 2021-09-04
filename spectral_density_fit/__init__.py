@@ -23,7 +23,7 @@ import nlopt
 
 @jit
 def Jmod_lorentz(ω,λs,g):
-    χ = jnp.einsum('il,jl,wl->wij',g,g,1/(λs[None,:]-ω[:,None]))
+    χ = jnp.einsum('il,jl,lw->ijw',g,g,1/(λs[:,None]-ω[None,:]))
     return χ.imag/jnp.pi
 
 """this actually solves the linear equation at each frequency. it is much less
@@ -36,15 +36,14 @@ def Jmod_naive(ω,Heff,g):
     Hω = Heff[None,:,:] - ω[:,None,None]*I[None,:,:]
     A = jnp.linalg.solve(Hω,g.T[None,:,:])
     χ = g @ A
-    return χ.imag/jnp.pi
+    return (χ.imag/jnp.pi).transpose(1,2,0)
 
 @partial(jax.custom_jvp, nondiff_argnums=(0,))
 def fχ(ω,Heff,g):
     λs, V = jnp.linalg.eig(Heff)
     V /= jnp.sqrt(jnp.sum(V**2,axis=0))
-    
     G = g @ V
-    return jnp.einsum('il,wl,jl->wij',G,1/(λs[None,:]-ω[:,None]),G)
+    return jnp.einsum('il,lw,jl->ijw',G,1/(λs[:,None]-ω[None,:]),G)
 
 def fχ_jvp(ω,primals,tangents):
     # χ = g 1/(H-w) g^T
@@ -57,35 +56,35 @@ def fχ_jvp(ω,primals,tangents):
     # (H-w) x = g^T
     # ∂H x + (H-w) ∂x = ∂g^T
     # ∂x = 1/(H-w) (∂g^T - ∂H x)
-    
+
     # χ = g x
     # ∂χ = ∂g x + g ∂x
     # ∂g x = ∂g 1/(H-w) g^T = ∂G 1/(Λ-w) G^T
-    
+
     # g ∂x = g 1/(H-w) (∂g^T - ∂H x)
     # g ∂x = G 1/(Λ-w) (∂G^T - V^T ∂H V 1/(Λ-w) G^T)
-    
+
     Heff, g = primals
     dHeff, dg = tangents
-    
+
     λs, V = jnp.linalg.eig(Heff)
     V /= jnp.sqrt(jnp.sum(V**2,axis=0))
     G = g @ V
     dG = dg @ V
-    λωinv = 1/(λs[None,:]-ω[:,None])
-    
-    χ = jnp.einsum('il,wl,jl->wij',G,λωinv,G)
+    λωinv = 1/(λs[:,None]-ω[None,:])
+
+    χ = jnp.einsum('il,lw,jl->ijw',G,λωinv,G)
 
     # ∂g x = ∂G 1/(Λ-w) G^T
-    dgx = jnp.einsum('il,wl,jl->wij',dG,λωinv,G)
+    dgx = jnp.einsum('il,lw,jl->ijw',dG,λωinv,G)
 
     # g ∂x = G 1/(Λ-w) (∂G^T - V^T ∂H V 1/(Λ-w) G^T)
     # g dx = G 1/(Λ-w) VTdx_b
-    VTdx_b = dG.T[None,:,:] - jnp.einsum('il,wl,jl->wij',V.T@dHeff@V,λωinv,G)
-    gdx = jnp.einsum('il,wl,wlj->wij',G,λωinv,VTdx_b)
-    
+    VTdx_b = dG.T[:,:,None] - jnp.einsum('il,lw,jl->ijw',V.T@dHeff@V,λωinv,G)
+    gdx = jnp.einsum('il,lw,ljw->ijw',G,λωinv,VTdx_b)
+
     dχ = dgx + gdx
-    
+
     return χ, dχ
 
 fχ.defjvp(fχ_jvp)
@@ -98,9 +97,10 @@ def Jmod(ω,Heff,g):
 # version that allows to pass "templates" for H and g that
 # indicate where they are allowed to be nonzero in the fit
 def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
+    ω = jnp.array(ω)
     J = jnp.array(J)
     if J.ndim == 1:
-        J = J[:,None,None]
+        J = J[None,None,:]
 
     if isinstance(Hgtmpl,tuple):
         Htmpl, gtmpl = Hgtmpl
@@ -108,12 +108,15 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
         assert Htmpl.shape == (Nm,Nm)
     else:
         Nm = int(Hgtmpl)
-        Ne = J.shape[-1]
+        Ne = J.shape[0]
         Htmpl = jnp.ones((Nm,Nm))
         gtmpl = jnp.ones((Ne,Nm))
 
-    assert J.shape == (len(ω),Ne,Ne)
-    
+    assert J.shape == (Ne,Ne,len(ω))
+
+    if fitlog and Ne>1:
+        raise ValueError(f"fitlog=True only supported for 1 emitter. Got Ne = {Ne}.")
+
     # get the indices of the nonzero entries in the upper triangle of Htmpl
     H_inds = np.nonzero(np.triu(Htmpl))
     # get the indices of the nonzero entries in gtmpl
@@ -121,7 +124,7 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     Nps_H = len(H_inds[0])
     Nps_g = len(g_inds[0])
     Nps = Nps_g + Nm + Nps_H
-    
+
     tmpH = jnp.zeros((Nm,Nm))
     tmpg = jnp.zeros((Ne,Nm))
 
@@ -157,7 +160,7 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
         if grad.size>0:
             grad[...] = grad_err(ps)
         return float(err(ps))
-    
+
     @jit
     def f_constraints(ps):
         "constraint function that forces eigenvalues to be within the range [λmin,λmax]"
@@ -185,11 +188,11 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     if λlims is not False:
         λmin, λmax = (ω[0],ω[-1]) if λlims is None else λlims
         opt.add_inequality_mconstraint(nlopt_constraints, np.zeros(2*Nm))
-    
+
     # add members to opt to have everything in a single object
     opt.Hκg_to_ps = Hκg_to_ps
     opt.ps_to_Hκg = ps_to_Hκg
     opt.Jfun = Jfun
     opt.obj_fun = nlopt_f
-    
+
     return opt
