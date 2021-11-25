@@ -129,11 +129,12 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     tmpg = jnp.zeros((Ne,Nm))
 
     def Hκg_to_ps(H,κ,g):
-        return jnp.hstack((g[g_inds],κ,H[H_inds]))
+        return jnp.hstack((g[g_inds],jnp.sqrt(κ),H[H_inds]))
 
     @jit
     def ps_to_Hκg(ps):
-        gps,κ,Hps = jnp.split(ps,[Nps_g,Nps_g+Nm])
+        gps,sqrtκ,Hps = jnp.split(ps,[Nps_g,Nps_g+Nm])
+        κ  = sqrtκ**2
         g  = jax.ops.index_update(tmpg,g_inds,gps)
         Hu = jax.ops.index_update(tmpH,H_inds,Hps)
         H = Hu + jnp.tril(Hu.T,-1)
@@ -180,10 +181,11 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     opt.set_min_objective(nlopt_f)
     opt.set_ftol_rel(1e-5)
 
-    # kappas have to be non-negative
-    lb = opt.get_lower_bounds()
-    lb[Nps_g:Nps_g+Nm] = 0.
-    opt.set_lower_bounds(lb)
+    # replaced by storing sqrt(kappa) and using its square for kappa
+    # # kappas have to be non-negative
+    # lb = opt.get_lower_bounds()
+    # lb[Nps_g:Nps_g+Nm] = 0.
+    # opt.set_lower_bounds(lb)
 
     if λlims is not False:
         λmin, λmax = (ω[0],ω[-1]) if λlims is None else λlims
