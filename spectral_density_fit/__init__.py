@@ -38,6 +38,22 @@ def Jmod_naive(ω,Heff,g):
     χ = g @ A
     return (χ.imag/jnp.pi).transpose(1,2,0)
 
+@jit
+def Jmod(ω,Heff,g):
+    λs, V = jnp.linalg.eig(Heff)
+    V /= jnp.sqrt(jnp.sum(V**2,axis=0))
+    G = g @ V
+    χ = jnp.einsum('il,lw,jl->ijw',G,1/(λs[:,None]-ω[None,:]),G)
+    return χ.imag/jnp.pi
+
+# fχ gives a jax tracer leak error if jitted in a function called with ω as an
+# explicit argument in newer jax versions (certainly in 0.4.14, not sure since
+# when, 0.2.19 was fine) due to the custom_jvp definition. So make a separate
+# function _Jmod_for_fit that uses fχ and is not jitted directly.
+def _Jmod_for_fit(ω,Heff,g):
+    χ = fχ(ω,Heff,g)
+    return χ.imag/jnp.pi
+
 @partial(jax.custom_jvp, nondiff_argnums=(0,))
 def fχ(ω,Heff,g):
     λs, V = jnp.linalg.eig(Heff)
@@ -45,6 +61,7 @@ def fχ(ω,Heff,g):
     G = g @ V
     return jnp.einsum('il,lw,jl->ijw',G,1/(λs[:,None]-ω[None,:]),G)
 
+@fχ.defjvp
 def fχ_jvp(ω,primals,tangents):
     # χ = g 1/(H-w) g^T
     # H = V @ diag(λ) @ V^T
@@ -87,13 +104,6 @@ def fχ_jvp(ω,primals,tangents):
 
     return χ, dχ
 
-fχ.defjvp(fχ_jvp)
-
-@jit
-def Jmod(ω,Heff,g):
-    χ = fχ(ω,Heff,g)
-    return χ.imag/jnp.pi
-
 # version that allows to pass "templates" for H and g that
 # indicate where they are allowed to be nonzero in the fit
 def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
@@ -135,8 +145,8 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     def ps_to_Hκg(ps):
         gps,sqrtκ,Hps = jnp.split(ps,[Nps_g,Nps_g+Nm])
         κ  = sqrtκ**2
-        g  = jax.ops.index_update(tmpg,g_inds,gps)
-        Hu = jax.ops.index_update(tmpH,H_inds,Hps)
+        g  = tmpg.at[g_inds].set(gps)
+        Hu = tmpH.at[H_inds].set(Hps)
         H = Hu + jnp.tril(Hu.T,-1)
         return H,κ,g
 
@@ -149,7 +159,10 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
 
     @jit
     def err(ps):
-        Jf = Jfun(ω,ps)
+        # this redoes Jfun, but with _Jmod_for_fit
+        H,κ,g = ps_to_Hκg(ps)
+        Heff = H-0.5j*jnp.diag(κ)
+        Jf = _Jmod_for_fit(ω,Heff,g)
         if fitlog:
             return jnp.linalg.norm(jnp.log(Jf) - jnp.log(J))
         else:
