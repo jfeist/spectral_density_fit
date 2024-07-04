@@ -8,7 +8,7 @@ https://doi.org/10.1103/PhysRevLett.126.093601
 __version__ = '0.1.0'
 __all__ = ["spectral_density_fitter"]
 
-from jax.config import config
+from jax import config
 config.update("jax_enable_x64", True)
 config.update("jax_platform_name", "cpu")
 # config.update("jax_debug_nans", True)
