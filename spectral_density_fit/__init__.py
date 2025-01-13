@@ -42,71 +42,85 @@ def Jmod_naive(ω,Heff,g):
 def Jmod(ω,Heff,g):
     λs, V = jnp.linalg.eig(Heff)
     V /= jnp.sqrt(jnp.sum(V**2,axis=0))
-    G = g @ V
-    χ = jnp.einsum('il,lw,jl->ijw',G,1/(λs[:,None]-ω[None,:]),G)
-    return χ.imag/jnp.pi
+    vHv = jnp.einsum('il,lw,jl->ijw',V,1/(λs[:,None]-ω[None,:]),V)
+    χ = jnp.einsum('il,lmw,jm->ijw',g,vHv.imag,g.conj())
+    return χ/jnp.pi
 
 # fχ gives a jax tracer leak error if jitted in a function called with ω as an
 # explicit argument in newer jax versions (certainly in 0.4.14, not sure since
 # when, 0.2.19 was fine) due to the custom_jvp definition. So make a separate
 # function _Jmod_for_fit that uses fχ and is not jitted directly.
 def _Jmod_for_fit(ω,Heff,g):
+    #χ = g @ fχc(ω,Heff).imag @ g.conj().T
     χ = fχ(ω,Heff,g)
-    return χ.imag/jnp.pi
+    return χ/jnp.pi
 
 @partial(jax.custom_jvp, nondiff_argnums=(0,))
 def fχ(ω,Heff,g):
     λs, V = jnp.linalg.eig(Heff)
     V /= jnp.sqrt(jnp.sum(V**2,axis=0))
-    G = g @ V
-    return jnp.einsum('il,lw,jl->ijw',G,1/(λs[:,None]-ω[None,:]),G)
+    vHv = jnp.einsum('il,lw,jl->ijw',V,1/(λs[:,None]-ω[None,:]),V)
+    return jnp.einsum('il,lmw,jm->ijw',g,vHv.imag,g.conj())
 
+####UNTEN############
 @fχ.defjvp
 def fχ_jvp(ω,primals,tangents):
-    # χ = g 1/(H-w) g^T
+    # χ = g [1/(H-w) - 1/(H.conjugate-w)]/(2i) g^\dagger
     # H = V @ diag(λ) @ V^T
     # G = g V
     # ∂G = ∂g V
 
     # express dx in terms of x, g, H dH, dg by using that it solves the linear equation
-    # x = 1/(H-w) g^T
-    # (H-w) x = g^T
-    # ∂H x + (H-w) ∂x = ∂g^T
-    # ∂x = 1/(H-w) (∂g^T - ∂H x)
+    # x1 = 1/(H-w) g^\dagger
+    # (H-w) x1 = g^\dagger
+    # ∂H x1 + (H-w) ∂x1 = ∂g^\dagger
+    # ∂x1 = 1/(H-w) (∂g^\dagger - ∂H x1)
 
-    # χ = g x
-    # ∂χ = ∂g x + g ∂x
-    # ∂g x = ∂g 1/(H-w) g^T = ∂G 1/(Λ-w) G^T
+    # x2 = 1/(H.conjugate-w) g^\dagger
+    # (H.conjugate-w) x2 = g^\dagger
+    # ∂H^\ast x2 + (H.conjugate-w) ∂x2 = ∂g^\dagger
+    # ∂x2 = 1/(H^\ast-w) (∂g^\dagger - ∂H^\ast x2)
 
-    # g ∂x = g 1/(H-w) (∂g^T - ∂H x)
-    # g ∂x = G 1/(Λ-w) (∂G^T - V^T ∂H V 1/(Λ-w) G^T)
+    # χ = g (x1 - x2)/2i
+    # ∂χ = [∂g (x1-x2) + g (∂x1-∂x2)]/2i
+
+    # ∂g x1 = ∂g 1/(H-w) g^T = ∂g V 1/(Λ-w) V^T g^\dagger
+    # ∂g x2 = ∂g 1/(H.conjugate-w) g^T = ∂g V^\ast 1/(Λ^\ast-w) V^\dagger g^\dagger
+    # ∂g (x1-x2)/2i = ∂g Im[V 1/(Λ-w) V^T] g^\dagger
+
+    # g ∂x1 = g 1/(H-w) (∂g^\dagger - ∂H x1) =  g V 1/(Λ-w) V^T( ∂g^\dagger - ∂H V 1/(Λ-w) V^T g^\dagger)
+    # g ∂x2 = g 1/(H^\ast-w) (∂g^\dagger - ∂H^\ast x1) =  g V^\ast 1/(Λ^\ast-w) V^\dagger( ∂g^\dagger - ∂H^\ast V^\ast 1/(Λ^\ast-w) V^\dagger g^\dagger)
+    # g (∂x1-∂x2)/2i = g Im(V 1/(Λ-w) V^T )  ∂g^\dagger   - g Im[V 1/(Λ-w) V^T   ∂H V 1/(Λ-w) V^T] g^\dagger
 
     Heff, g = primals
     dHeff, dg = tangents
+    gc, dgc = g.conj(), dg.conj()
 
     λs, V = jnp.linalg.eig(Heff)
     V /= jnp.sqrt(jnp.sum(V**2,axis=0))
-    G = g @ V
-    dG = dg @ V
     λωinv = 1/(λs[:,None]-ω[None,:])
 
-    χ = jnp.einsum('il,lw,jl->ijw',G,λωinv,G)
+    χ1 = jnp.einsum('il,lw,jl->ijw',V,λωinv,V)
+    χ = jnp.einsum('il,lmw,jm->ijw',g,χ1.imag,gc)
 
-    # ∂g x = ∂G 1/(Λ-w) G^T
-    dgx = jnp.einsum('il,lw,jl->ijw',dG,λωinv,G)
+    # ∂g x = ∂g (x1-x2)/2i = ∂g Im[V 1/(Λ-w) V^T] g^\dagger
+    dgx = jnp.einsum('il,lmw,jm->ijw',dg,χ1.imag,gc)
 
-    # g ∂x = G 1/(Λ-w) (∂G^T - V^T ∂H V 1/(Λ-w) G^T)
-    # g dx = G 1/(Λ-w) VTdx_b
-    VTdx_b = dG.T[:,:,None] - jnp.einsum('il,lw,jl->ijw',V.T@dHeff@V,λωinv,G)
-    gdx = jnp.einsum('il,lw,ljw->ijw',G,λωinv,VTdx_b)
+    # g (∂x1-∂x2)/2i = g Im(V 1/(Λ-w) V^T )  ∂g^\dagger   - g Im[V 1/(Λ-w)  V^T   ∂H V 1/(Λ-w) V^T] g^\dagger
+    # = g Im[χ1] ∂g^\dagger - g Im[χ1  ∂H χ1] g^\dagger
+    gdx1 =  jnp.einsum('il,lmw,jm->ijw',g,χ1.imag,dgc)
+    VTdx_b1 = jnp.einsum('imw,ml,ljw->ijw',χ1,dHeff,χ1)
+    gdx2 = jnp.einsum('il,lmw,jm->ijw',g,VTdx_b1.imag,gc)
 
+    gdx = gdx1 - gdx2
     dχ = dgx + gdx
-
     return χ, dχ
+
+
 
 # version that allows to pass "templates" for H and g that
 # indicate where they are allowed to be nonzero in the fit
-def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
+def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False,complex=False):
     ω = jnp.array(ω)
     J = jnp.array(J)
     if J.ndim == 1:
@@ -133,22 +147,38 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     g_inds = np.nonzero(gtmpl)
     Nps_H = len(H_inds[0])
     Nps_g = len(g_inds[0])
-    Nps = Nps_g + Nm + Nps_H
 
     tmpH = jnp.zeros((Nm,Nm))
     tmpg = jnp.zeros((Ne,Nm))
 
-    def Hκg_to_ps(H,κ,g):
-        return jnp.hstack((g[g_inds],jnp.sqrt(κ),H[H_inds]))
+    if complex:
+        Nps = 2*Nps_g + Nm + Nps_H
 
-    @jit
-    def ps_to_Hκg(ps):
-        gps,sqrtκ,Hps = jnp.split(ps,[Nps_g,Nps_g+Nm])
-        κ  = sqrtκ**2
-        g  = tmpg.at[g_inds].set(gps)
-        Hu = tmpH.at[H_inds].set(Hps)
-        H = Hu + jnp.tril(Hu.T,-1)
-        return H,κ,g
+        def Hκg_to_ps(H,κ,g):
+            return jnp.hstack((g[g_inds].real, g[g_inds].imag ,jnp.sqrt(κ),H[H_inds]))
+
+        @jit
+        def ps_to_Hκg(ps):
+            gps, gpsc, sqrtκ,Hps = jnp.split(ps,[Nps_g, 2*Nps_g, 2*Nps_g+Nm])
+            κ  = sqrtκ**2
+            g  = tmpg.at[g_inds].set(gps) + 1j * tmpg.at[g_inds].set(gpsc)
+            Hu = tmpH.at[H_inds].set(Hps)
+            H = Hu + jnp.tril(Hu.T,-1)
+            return H,κ,g
+    else:
+        Nps = Nps_g + Nm + Nps_H
+
+        def Hκg_to_ps(H,κ,g):
+            return jnp.hstack((g[g_inds],jnp.sqrt(κ),H[H_inds]))
+
+        @jit
+        def ps_to_Hκg(ps):
+            gps,sqrtκ,Hps = jnp.split(ps,[Nps_g,Nps_g+Nm])
+            κ  = sqrtκ**2
+            g  = tmpg.at[g_inds].set(gps)
+            Hu = tmpH.at[H_inds].set(Hps)
+            H = Hu + jnp.tril(Hu.T,-1)
+            return H,κ,g
 
     @jit
     def Jfun(ω,ps):
