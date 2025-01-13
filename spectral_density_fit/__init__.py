@@ -50,25 +50,24 @@ def Jmod_naive(ω,Heff,g):
 def Jmod(ω,Heff,g):
     λs, V = jnp.linalg.eig(Heff)
     V /= jnp.sqrt(jnp.sum(V**2,axis=0))
-    vHv = jnp.einsum('il,lw,jl->ijw',V,1/(λs[:,None]-ω[None,:]),V)
-    χ = jnp.einsum('il,lmw,jm->ijw',g,vHv.imag,g.conj())
-    return χ/jnp.pi
+    χ = jnp.einsum('il,lw,jl->ijw',V,1/(λs[:,None]-ω[None,:]),V)
+    return jnp.einsum('il,lmw,jm->ijw',g,χ.imag,g.conj()) / jnp.pi
 
 # fχ gives a jax tracer leak error if jitted in a function called with ω as an
 # explicit argument in newer jax versions (certainly in 0.4.14, not sure since
 # when, 0.2.19 was fine) due to the custom_jvp definition. So make a separate
 # function _Jmod_for_fit that uses fχ and is not jitted directly.
 def _Jmod_for_fit(ω,Heff,g):
-    #χ = g @ fχc(ω,Heff).imag @ g.conj().T
-    vHv = fχ(ω,Heff)
-    return jnp.einsum('il,lmw,jm->ijw',g,vHv.imag,g.conj()) / jnp.pi
+    # χ = 1/(H-w)
+    χ = fχ(ω,Heff)
+    # J = g Im(χ) g^\dagger / π
+    return jnp.einsum('il,lmw,jm->ijw',g,χ.imag,g.conj()) / jnp.pi
 
 @partial(jax.custom_jvp, nondiff_argnums=(0,))
 def fχ(ω,Heff):
     λs, V = jnp.linalg.eig(Heff)
     V /= jnp.sqrt(jnp.sum(V**2,axis=0))
-    vHv = jnp.einsum('il,lw,jl->ijw',V,1/(λs[:,None]-ω[None,:]),V)
-    return vHv
+    return jnp.einsum('il,lw,jl->ijw',V,1/(λs[:,None]-ω[None,:]),V)
 
 ####UNTEN############
 @fχ.defjvp
