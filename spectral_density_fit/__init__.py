@@ -120,7 +120,7 @@ def fχ_jvp(ω,primals,tangents):
 
 # version that allows to pass "templates" for H and g that
 # indicate where they are allowed to be nonzero in the fit
-def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False,complex=False):
+def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     ω = jnp.array(ω)
     J = jnp.array(J)
     if J.ndim == 1:
@@ -151,7 +151,7 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False,complex=False):
     tmpH = jnp.zeros((Nm,Nm))
     tmpg = jnp.zeros((Ne,Nm))
 
-    if complex:
+    if jnp.iscomplexobj(J):
         Nps = 2*Nps_g + Nm + Nps_H
 
         def Hκg_to_ps(H,κ,g):

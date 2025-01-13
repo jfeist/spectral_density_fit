@@ -17,6 +17,7 @@ def test_real():
     opt = spectral_density_fitter(ω,J,Nm)
     ps = opt.Hκg_to_ps(Heff.real + 0.03*((x:=np.random.rand(Nm,Nm)) + x.T), -2*Heff.imag.diagonal() + 0.1*np.random.rand(Nm), g + 0.1*np.random.rand(Ne,Nm))
     ps = opt.optimize(ps)
+    assert np.isrealobj(opt.Jfun(ω,ps))
     assert opt.obj_fun(ps,np.empty(0)) < 0.001
 
 def test_complex():
@@ -28,7 +29,8 @@ def test_complex():
     Heff = H + H.T - 0.5j*np.diag(np.random.rand(Nm))
     g = np.random.normal(size=(Ne,Nm)) + 1j*np.random.normal(size=(Ne,Nm))
     J = Jmod(ω,Heff,g)
-    opt = spectral_density_fitter(ω,J,Nm,complex=True)
+    opt = spectral_density_fitter(ω,J,Nm)
     ps = opt.Hκg_to_ps(Heff.real + 0.03*((x:=np.random.rand(Nm,Nm)) + x.T), -2*Heff.imag.diagonal() + 0.1*np.random.rand(Nm), g + 0.1*np.random.rand(Ne,Nm))
     ps = opt.optimize(ps)
+    assert np.iscomplexobj(opt.Jfun(ω,ps))
     assert opt.obj_fun(ps,np.empty(0)) < 0.005
