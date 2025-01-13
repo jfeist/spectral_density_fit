@@ -60,71 +60,34 @@ def Jmod(ω,Heff,g):
 # function _Jmod_for_fit that uses fχ and is not jitted directly.
 def _Jmod_for_fit(ω,Heff,g):
     #χ = g @ fχc(ω,Heff).imag @ g.conj().T
-    χ = fχ(ω,Heff,g)
-    return χ/jnp.pi
+    vHv = fχ(ω,Heff)
+    return jnp.einsum('il,lmw,jm->ijw',g,vHv.imag,g.conj()) / jnp.pi
 
 @partial(jax.custom_jvp, nondiff_argnums=(0,))
-def fχ(ω,Heff,g):
+def fχ(ω,Heff):
     λs, V = jnp.linalg.eig(Heff)
     V /= jnp.sqrt(jnp.sum(V**2,axis=0))
     vHv = jnp.einsum('il,lw,jl->ijw',V,1/(λs[:,None]-ω[None,:]),V)
-    return jnp.einsum('il,lmw,jm->ijw',g,vHv.imag,g.conj())
+    return vHv
 
 ####UNTEN############
 @fχ.defjvp
 def fχ_jvp(ω,primals,tangents):
-    # χ = g [1/(H-w) - 1/(H.conjugate-w)]/(2i) g^\dagger
-    # H = V @ diag(λ) @ V^T
-    # G = g V
-    # ∂G = ∂g V
-
-    # express dx in terms of x, g, H dH, dg by using that it solves the linear equation
-    # x1 = 1/(H-w) g^\dagger
-    # (H-w) x1 = g^\dagger
-    # ∂H x1 + (H-w) ∂x1 = ∂g^\dagger
-    # ∂x1 = 1/(H-w) (∂g^\dagger - ∂H x1)
-
-    # x2 = 1/(H.conjugate-w) g^\dagger
-    # (H.conjugate-w) x2 = g^\dagger
-    # ∂H^\ast x2 + (H.conjugate-w) ∂x2 = ∂g^\dagger
-    # ∂x2 = 1/(H^\ast-w) (∂g^\dagger - ∂H^\ast x2)
-
-    # χ = g (x1 - x2)/2i
-    # ∂χ = [∂g (x1-x2) + g (∂x1-∂x2)]/2i
-
-    # ∂g x1 = ∂g 1/(H-w) g^T = ∂g V 1/(Λ-w) V^T g^\dagger
-    # ∂g x2 = ∂g 1/(H.conjugate-w) g^T = ∂g V^\ast 1/(Λ^\ast-w) V^\dagger g^\dagger
-    # ∂g (x1-x2)/2i = ∂g Im[V 1/(Λ-w) V^T] g^\dagger
-
-    # g ∂x1 = g 1/(H-w) (∂g^\dagger - ∂H x1) =  g V 1/(Λ-w) V^T( ∂g^\dagger - ∂H V 1/(Λ-w) V^T g^\dagger)
-    # g ∂x2 = g 1/(H^\ast-w) (∂g^\dagger - ∂H^\ast x1) =  g V^\ast 1/(Λ^\ast-w) V^\dagger( ∂g^\dagger - ∂H^\ast V^\ast 1/(Λ^\ast-w) V^\dagger g^\dagger)
-    # g (∂x1-∂x2)/2i = g Im(V 1/(Λ-w) V^T )  ∂g^\dagger   - g Im[V 1/(Λ-w) V^T   ∂H V 1/(Λ-w) V^T] g^\dagger
-
-    Heff, g = primals
-    dHeff, dg = tangents
-    gc, dgc = g.conj(), dg.conj()
+    # χ = 1/(H-w)
+    # express dχ in terms of χ, H, dH by using that it solves the linear equation
+    # (H-w) χ = 1
+    # ∂H χ + (H-w) ∂χ = 0
+    # ∂χ = 1/(H-w) (-∂H χ) = -χ ∂H χ
+    Heff, = primals
+    dHeff, = tangents
 
     λs, V = jnp.linalg.eig(Heff)
     V /= jnp.sqrt(jnp.sum(V**2,axis=0))
     λωinv = 1/(λs[:,None]-ω[None,:])
 
-    χ1 = jnp.einsum('il,lw,jl->ijw',V,λωinv,V)
-    χ = jnp.einsum('il,lmw,jm->ijw',g,χ1.imag,gc)
-
-    # ∂g x = ∂g (x1-x2)/2i = ∂g Im[V 1/(Λ-w) V^T] g^\dagger
-    dgx = jnp.einsum('il,lmw,jm->ijw',dg,χ1.imag,gc)
-
-    # g (∂x1-∂x2)/2i = g Im(V 1/(Λ-w) V^T )  ∂g^\dagger   - g Im[V 1/(Λ-w)  V^T   ∂H V 1/(Λ-w) V^T] g^\dagger
-    # = g Im[χ1] ∂g^\dagger - g Im[χ1  ∂H χ1] g^\dagger
-    gdx1 =  jnp.einsum('il,lmw,jm->ijw',g,χ1.imag,dgc)
-    VTdx_b1 = jnp.einsum('imw,ml,ljw->ijw',χ1,dHeff,χ1)
-    gdx2 = jnp.einsum('il,lmw,jm->ijw',g,VTdx_b1.imag,gc)
-
-    gdx = gdx1 - gdx2
-    dχ = dgx + gdx
+    χ = jnp.einsum('il,lw,jl->ijw',V,λωinv,V)
+    dχ = jnp.einsum('imw,ml,ljw->ijw',χ,-dHeff,χ)
     return χ, dχ
-
-
 
 # version that allows to pass "templates" for H and g that
 # indicate where they are allowed to be nonzero in the fit
