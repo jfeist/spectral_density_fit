@@ -23,12 +23,16 @@ def test_Jmod_real():
     Nm, Ne, ω, Heff, g = get_test_data(False)
     J1 = Jmod(ω,Heff,g)
     J2 = Jmod_naive(ω,Heff,g)
+    assert np.isrealobj(J1)
+    assert np.isrealobj(J2)
     assert np.allclose(J1,J2)
 
 def test_Jmod_complex():
     Nm, Ne, ω, Heff, g = get_test_data(True)
     J1 = Jmod(ω,Heff,g)
     J2 = Jmod_naive(ω,Heff,g)
+    assert np.iscomplexobj(J1)
+    assert np.iscomplexobj(J2)
     assert np.allclose(J1,J2)
 
 def test_real():
