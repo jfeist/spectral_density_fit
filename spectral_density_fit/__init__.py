@@ -35,13 +35,15 @@ def Jmod_naive(ω,Heff,g):
     I = jnp.eye(Heff.shape[0])
     Hω = Heff[None,:,:] - ω[:,None,None]*I[None,:,:]
     if jnp.iscomplexobj(g):
-        # g @ Im(1/(H-w)) @ g^\dagger
-        A1 = jnp.linalg.solve(Hω,        g.conj().T[None,:,:])
-        χ1 = g @ A1
-        A2 = jnp.linalg.solve(Hω.conj(), g.conj().T[None,:,:])
+        # J = g @ Im(1/(H-w)) @ g^\dagger / π
+        # J = g @ (1/(H-w) - 1/(H^* - w)) @ g^\dagger / 2iπ
+        gc = g.conj().T[None,:,:]
+        A1 = jnp.linalg.solve(Hω,        gc)
+        A2 = jnp.linalg.solve(Hω.conj(), gc)
         χ = g @ (A1 - A2)
         return (χ/(2j*jnp.pi)).transpose(1,2,0)
     else:
+        # J = g @ Im(1/(H-w)) @ g^\dagger / π
         A = jnp.linalg.solve(Hω,g.T[None,:,:])
         χ = g @ A
         return (χ.imag/jnp.pi).transpose(1,2,0)
