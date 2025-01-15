@@ -5,7 +5,7 @@ Fernández-Domínguez, and J. Feist, Phys. Rev. Lett. 126, 093601 (2021),
 https://doi.org/10.1103/PhysRevLett.126.093601
 """
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __all__ = ["spectral_density_fitter"]
 
 from jax import config
