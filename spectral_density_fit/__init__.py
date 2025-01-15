@@ -29,19 +29,25 @@ def Jmod_lorentz(ω,λs,g):
 """this actually solves the linear equation at each frequency. it is much less
 efficient than diagonalizing Heff, but jax can calculate the gradient directly,
 so we can use it as a check for our implementation.
+
+Note that the diagonalization-based routines below assume that H is complex
+symmetric, H = H^T (and thus H^\dagger = H^*), while this one does not, so it is
+in principle more general.
 """
 @jit
 def Jmod_naive(ω,Heff,g):
     I = jnp.eye(Heff.shape[0])
     Hω = Heff[None,:,:] - ω[:,None,None]*I[None,:,:]
     if jnp.iscomplexobj(g):
-        # J = g @ Im(1/(H-w)) @ g^\dagger / π
-        # J = g @ (1/(H-w) - 1/(H^* - w)) @ g^\dagger / 2iπ
-        gc = g.conj().T[None,:,:]
-        A1 = jnp.linalg.solve(Hω,        gc)
-        A2 = jnp.linalg.solve(Hω.conj(), gc)
-        χ = g @ (A1 - A2)
-        return (χ/(2j*jnp.pi)).transpose(1,2,0)
+        # X = 1/(H-w)
+        # X = X^T -> X^* = X^\dagger
+        # Im(X) = (X-X^*) / 2i = (X-X^\dagger) / 2i
+        # J = g @ Im(X) @ g^\dagger / π = g @ (X-X^\dagger) @ g^\dagger / 2iπ
+        # j = g @ X @ g^\dagger
+        # J = (j - j^\dagger) / 2iπ
+        j = g @ jnp.linalg.solve(Hω, g.conj().T[None,:,:])
+        # indices of j are (w,i,j), j^\dagger = j.conj()[w,j,i], transpose to (i,j,w)
+        return ((j.transpose(1,2,0) - j.conj().transpose(2,1,0))/(2j*jnp.pi))
     else:
         # J = g @ Im(1/(H-w)) @ g^\dagger / π
         A = jnp.linalg.solve(Hω,g.T[None,:,:])
@@ -71,7 +77,6 @@ def fχ(ω,Heff):
     V /= jnp.sqrt(jnp.sum(V**2,axis=0))
     return jnp.einsum('il,lw,jl->ijw',V,1/(λs[:,None]-ω[None,:]),V)
 
-####UNTEN############
 @fχ.defjvp
 def fχ_jvp(ω,primals,tangents):
     # χ = 1/(H-w)
