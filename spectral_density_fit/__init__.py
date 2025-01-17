@@ -5,7 +5,7 @@ Fernández-Domínguez, and J. Feist, Phys. Rev. Lett. 126, 093601 (2021),
 https://doi.org/10.1103/PhysRevLett.126.093601
 """
 
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 __all__ = ["spectral_density_fitter"]
 
 from jax import config
@@ -38,38 +38,33 @@ in principle more general.
 def Jmod_naive(ω,Heff,g):
     I = jnp.eye(Heff.shape[0])
     Hω = Heff[None,:,:] - ω[:,None,None]*I[None,:,:]
-    if jnp.iscomplexobj(g):
-        # X = 1/(H-w)
-        # X = X^T -> X^* = X^\dagger
-        # Im(X) = (X-X^*) / 2i = (X-X^\dagger) / 2i
-        # J = g @ Im(X) @ g^\dagger / π = g @ (X-X^\dagger) @ g^\dagger / 2iπ
-        # j = g @ X @ g^\dagger
-        # J = (j - j^\dagger) / 2iπ
-        j = g @ jnp.linalg.solve(Hω, g.conj().T[None,:,:])
-        # indices of j are (w,i,j), j^\dagger = j.conj()[w,j,i], transpose to (i,j,w)
-        return ((j.transpose(1,2,0) - j.conj().transpose(2,1,0))/(2j*jnp.pi))
+    # χ = 1/(H-w)
+    # χ = χ^T -> χ^* = χ^\dagger
+    # Im(χ) = (χ-χ^*) / 2i = (χ-χ^\dagger) / 2i
+    # J = g @ Im(χ) @ g^\dagger / π = g @ (χ-χ^\dagger) @ g^\dagger / 2iπ
+    # R = g @ χ @ g^\dagger
+    # J = (R - R^\dagger) / 2iπ
+    R = g @ jnp.linalg.solve(Hω, g.conj().T[None,:,:])
+    if jnp.iscomplexobj(g) and g.shape[0] > 1:
+        # if g is complex and Ne>1, J is a Hermitian matrix with complex off-diagonal elements.
+        # indices of R are (w,i,j), R^\dagger = R.conj()[w,j,i], transpose to (i,j,w)
+        return ((R.transpose(1,2,0) - R.conj().transpose(2,1,0)) / (2j*jnp.pi))
     else:
-        # J = g @ Im(1/(H-w)) @ g^\dagger / π
-        A = jnp.linalg.solve(Hω,g.T[None,:,:])
-        χ = g @ A
-        return (χ.imag/jnp.pi).transpose(1,2,0)
-
-@jit
-def Jmod(ω,Heff,g):
-    λs, V = jnp.linalg.eig(Heff)
-    V /= jnp.sqrt(jnp.sum(V**2,axis=0))
-    χ = jnp.einsum('il,lw,jl->ijw',V,1/(λs[:,None]-ω[None,:]),V)
-    return jnp.einsum('il,lmw,jm->ijw',g,χ.imag,g.conj()) / jnp.pi
+        # we assume that H is complex symmetric, so for real g, R = R^T
+        # -> J = R.imag / π (and is thus explicitly real)
+        return R.imag.transpose(1,2,0) / jnp.pi
 
 # fχ gives a jax tracer leak error if jitted in a function called with ω as an
 # explicit argument in newer jax versions (certainly in 0.4.14, not sure since
-# when, 0.2.19 was fine) due to the custom_jvp definition. So make a separate
-# function _Jmod_for_fit that uses fχ and is not jitted directly.
-def _Jmod_for_fit(ω,Heff,g):
+# when, 0.2.19 was fine) due to the custom_jvp definition. So define the function
+# without jit, and below provide the jitted wrapper
+def _non_jitted_Jmod(ω,Heff,g):
     # χ = 1/(H-w)
     χ = fχ(ω,Heff)
     # J = g Im(χ) g^\dagger / π
     return jnp.einsum('il,lmw,jm->ijw',g,χ.imag,g.conj()) / jnp.pi
+
+Jmod = jit(_non_jitted_Jmod)
 
 @partial(jax.custom_jvp, nondiff_argnums=(0,))
 def fχ(ω,Heff):
@@ -161,7 +156,7 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     def Jfun(ω,ps):
         H,κ,g = ps_to_Hκg(ps)
         Heff = H-0.5j*jnp.diag(κ)
-        JJ = Jmod(ω,Heff,g)
+        JJ = _non_jitted_Jmod(ω,Heff,g)
         return JJ
 
     @jit
@@ -169,7 +164,7 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
         # this redoes Jfun, but with _Jmod_for_fit
         H,κ,g = ps_to_Hκg(ps)
         Heff = H-0.5j*jnp.diag(κ)
-        Jf = _Jmod_for_fit(ω,Heff,g)
+        Jf = _non_jitted_Jmod(ω,Heff,g)
         if fitlog:
             return jnp.linalg.norm(jnp.log(Jf) - jnp.log(J))
         else:
