@@ -152,7 +152,6 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
             H = Hu + jnp.tril(Hu.T,-1)
             return H,κ,g
 
-    @jit
     def Jfun(ω,ps):
         H,κ,g = ps_to_Hκg(ps)
         Heff = H-0.5j*jnp.diag(κ)
@@ -161,10 +160,7 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
 
     @jit
     def err(ps):
-        # this redoes Jfun, but with _Jmod_for_fit
-        H,κ,g = ps_to_Hκg(ps)
-        Heff = H-0.5j*jnp.diag(κ)
-        Jf = _non_jitted_Jmod(ω,Heff,g)
+        Jf = Jfun(ω,ps)
         if fitlog:
             return jnp.linalg.norm(jnp.log(Jf) - jnp.log(J))
         else:
@@ -209,7 +205,7 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     # add members to opt to have everything in a single object
     opt.Hκg_to_ps = Hκg_to_ps
     opt.ps_to_Hκg = ps_to_Hκg
-    opt.Jfun = Jfun
+    opt.Jfun = jit(Jfun) # we can jit this because it is not used in the optimization
     opt.obj_fun = nlopt_f
 
     return opt
