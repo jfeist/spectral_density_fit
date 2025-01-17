@@ -192,12 +192,6 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False):
     opt.set_min_objective(nlopt_f)
     opt.set_ftol_rel(1e-5)
 
-    # replaced by storing sqrt(kappa) and using its square for kappa
-    # # kappas have to be non-negative
-    # lb = opt.get_lower_bounds()
-    # lb[Nps_g:Nps_g+Nm] = 0.
-    # opt.set_lower_bounds(lb)
-
     if λlims is not False:
         λmin, λmax = (ω[0],ω[-1]) if λlims is None else λlims
         opt.add_inequality_mconstraint(nlopt_constraints, np.zeros(2*Nm))
