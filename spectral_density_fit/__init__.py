@@ -60,7 +60,8 @@ def _non_jitted_Jmod(ω,Heff,g):
     # χ = 1/(H-w)
     χ = fχ(ω,Heff)
     # J = g Im(χ) g^\dagger / π
-    return jnp.einsum('il,lmw,jm->ijw',g,χ.imag,g.conj()) / jnp.pi
+    # the .astype(g.dtype) ensures that no warnings are raised
+    return jnp.einsum('il,lmw,jm->ijw', g, χ.imag.astype(g.dtype), g.conj()) / jnp.pi
 
 def Jmod(ω,Heff,g):
     # diagonalization is not supported on GPUs, so we need to run this on CPU
@@ -186,6 +187,7 @@ def spectral_density_fitter(ω,J,Hgtmpl,λlims=None,fitlog=False,diagonalize=Non
         @jit
         def err(ps):
             Jf = Jfun(ω,ps)
+            assert jnp.iscomplexobj(Jf) == jnp.iscomplexobj(J)
             if fitlog:
                 return jnp.linalg.norm(jnp.log(Jf) - jnp.log(J))
             else:
