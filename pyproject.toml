@@ -19,6 +19,12 @@ dependencies = [
 [project.urls]
 Home = "https://github.com/jfeist/spectral_density_fit"
 
+[dependency-groups]
+dev = [
+    "pytest>=7.4.4",
+    "ruff>=0.11.2",
+]
+
 [tool.pytest.ini_options]
 filterwarnings = [
     "ignore:builtin type [sS]wig[a-zA-Z]+ has no __module__ attribute:DeprecationWarning",
