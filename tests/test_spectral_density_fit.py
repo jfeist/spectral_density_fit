@@ -1,11 +1,11 @@
 from spectral_density_fit import __version__, spectral_density_fitter, Jmod, Jmod_naive
 
+import numpy as np
+
 # run the tests in 64-bit precision
 import jax
 
 jax.config.update("jax_enable_x64", True)
-
-import numpy as np
 
 
 def test_version():

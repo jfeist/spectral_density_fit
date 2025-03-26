@@ -38,8 +38,8 @@ principle more general.
 
 @jit
 def Jmod_naive(ω, Heff, g):
-    I = jnp.eye(Heff.shape[0])
-    Hω = Heff[None, :, :] - ω[:, None, None] * I[None, :, :]
+    II = jnp.eye(Heff.shape[0])
+    Hω = Heff[None, :, :] - ω[:, None, None] * II[None, :, :]
     # χ = 1/(H-w)
     # χ = χ^T -> χ^* = χ^\dagger
     # Im(χ) = (χ-χ^*) / 2i = (χ-χ^\dagger) / 2i
