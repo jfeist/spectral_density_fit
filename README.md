@@ -8,8 +8,14 @@ It is currently functional, but documentation is missing. To install, run
 ```
 pip install git+https://github.com/jfeist/spectral_density_fit
 ```
+NOTE that `spectral_density_fit` recently changed from forcing 64-bit mode for jax (which the code uses to get the gradients of the function to minimize in the fit, and to support running on GPUs) to not touching the configuration automatically. In practice, it is likely that you want to use 64-bit precision for the fitting, to do so, you need to run, **before** any other calculations, the following:
+```python
+import jax
+jax.config.update("jax_enable_x64", True)
+```
 
-If you want to develop it, we recommend using [uv](https://docs.astral.sh/uv) to
-manage the project. In particular, after checking out the git repository, you
-can simply run `uv run pytest` to run the tests, and `uv run ruff check` or `uv
-run ruff format` to lint and format the code.
+If you want to develop the package, we recommend using
+[uv](https://docs.astral.sh/uv) to manage the project and dependencies. In
+particular, after checking out the git repository, you can simply run `uv run
+pytest` to run the tests, and `uv run ruff check` or `uv run ruff format` to
+lint and format the code.
