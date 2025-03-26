@@ -15,6 +15,7 @@ from functools import partial
 
 import numpy as np
 import nlopt
+import warnings
 
 
 @jit
@@ -104,6 +105,13 @@ def fχ_jvp(ω, primals, tangents):
 # version that allows to pass "templates" for H and g that
 # indicate where they are allowed to be nonzero in the fit
 def spectral_density_fitter(ω, J, Hgtmpl, λlims=None, fitlog=False, diagonalize=None, device=None, algorithm=nlopt.LD_CCSAQ):
+    if not jax.config.jax_enable_x64:
+        warnings.warn(
+            """jax is not using 64bit precision, this can affect the fitting accuracy.
+        call jax.config.update("jax_enable_x64", True) at the start of the script to change this.""",
+            RuntimeWarning,
+        )
+
     if diagonalize is None:
         # if diagonalize is not set explicitly, default to it while running on CPU
         # but use direct inversion on GPU (since non-Hermitian diagonalization is
