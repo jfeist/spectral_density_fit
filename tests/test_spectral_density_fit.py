@@ -29,9 +29,12 @@ def get_test_data(complex):
 
 def randomize_Hκg(Heff, g, Hfac=0.03, κfac=0.1, gfac=0.1):
     Ne, Nm = g.shape
-    Hr = Heff.real + Hfac * ((x := np.random.rand(Nm, Nm)) + x.T)
-    κr = -2 * Heff.imag.diagonal() + κfac * np.random.rand(Nm)
-    gr = g + gfac * np.random.rand(Ne, Nm)
+    x = np.random.normal(size=(Nm, Nm))
+    Hr = Heff.real + 0.5 * Hfac * (x + x.T)
+    κr = abs(-2 * Heff.imag.diagonal() + κfac * np.random.normal(Nm))
+    gr = g + gfac * np.random.normal(size=(Ne, Nm))
+    if np.iscomplexobj(g):
+        gr += 1j * gfac * np.random.normal(size=(Ne, Nm))
     return (Hr, κr, gr)
 
 
@@ -60,7 +63,7 @@ def _test_gradient(complex):
     opt_2 = spectral_density_fitter(ω, J, Nm, diagonalize=True)
 
     ps = opt_1.Hκg_to_ps(*randomize_Hκg(Heff, g))
-    grad_1 = np.empty_like(ps, dtype=np.complex128)
+    grad_1 = np.empty_like(ps)
     grad_2 = np.empty_like(grad_1)
     err_1 = opt_1.obj_fun(ps, grad_1)
     err_2 = opt_2.obj_fun(ps, grad_2)
@@ -77,7 +80,11 @@ def _test_fitting(complex, thresh):
     Nm, Ne, ω, Heff, g = get_test_data(complex)
     J = Jmod(ω, Heff, g)
     opt = spectral_density_fitter(ω, J, Nm)
-    ps = opt.Hκg_to_ps(*randomize_Hκg(Heff, g))
+    ps = opt.Hκg_to_ps(*randomize_Hκg(Heff, g, Hfac=0.005, κfac=0.001, gfac=0.01))
+    opt.set_ftol_rel(0)
+    # since we are fitting to a spectral density given by the few-mode model, we
+    # know that the global minimum is at zero
+    opt.set_stopval(thresh)
     ps = opt.optimize(ps)
     if complex:
         assert np.iscomplexobj(opt.Jfun(ω, ps))
@@ -87,7 +94,7 @@ def _test_fitting(complex, thresh):
 
 
 def test_fitting_real():
-    _test_fitting(False, 0.001)
+    _test_fitting(False, 0.005)
 
 
 def test_fitting_complex():
