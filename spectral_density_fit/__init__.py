@@ -103,7 +103,7 @@ def fχ_jvp(ω, primals, tangents):
 
 # version that allows to pass "templates" for H and g that
 # indicate where they are allowed to be nonzero in the fit
-def spectral_density_fitter(ω, J, Hgtmpl, λlims=None, fitlog=False, diagonalize=None, device=None):
+def spectral_density_fitter(ω, J, Hgtmpl, λlims=None, fitlog=False, diagonalize=None, device=None, algorithm=nlopt.LD_CCSAQ):
     if diagonalize is None:
         # if diagonalize is not set explicitly, default to it while running on CPU
         # but use direct inversion on GPU (since non-Hermitian diagonalization is
@@ -226,7 +226,7 @@ def spectral_density_fitter(ω, J, Hgtmpl, λlims=None, fitlog=False, diagonaliz
             if grad.size > 0:
                 grad[...] = jac_constraints(ps)
 
-        opt = nlopt.opt(nlopt.LD_MMA, Nps)
+        opt = nlopt.opt(algorithm, Nps)
         opt.set_min_objective(nlopt_f)
         opt.set_ftol_rel(1e-5)
 
