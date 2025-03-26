@@ -29,3 +29,8 @@ dev = [
 filterwarnings = [
     "ignore:builtin type [sS]wig[a-zA-Z]+ has no __module__ attribute:DeprecationWarning",
 ]
+
+[tool.ruff]
+line-length = 200
+[tool.ruff.format]
+skip-magic-trailing-comma = true
