@@ -2,6 +2,7 @@ from spectral_density_fit import __version__, spectral_density_fitter, Jmod, Jmo
 
 import numpy as np
 import jax
+import pytest
 
 # run the tests in 64-bit precision
 jax.config.update("jax_enable_x64", True)
@@ -16,6 +17,21 @@ def get_test_data(complex):
     Ne = 4
     np.random.seed(1234)
     ω = np.linspace(-3.5, 3.5, 101)
+    H = np.random.normal(size=(Nm, Nm))
+    Heff = H + H.T - 0.5j * np.diag(np.random.rand(Nm))
+
+    g = np.random.normal(size=(Ne, Nm))
+    if complex:
+        g = g + 1j * np.random.normal(size=(Ne, Nm))
+
+    return Nm, Ne, ω, Heff, g
+
+
+def get_bench_data(complex):
+    Nm = 20
+    Ne = 12
+    np.random.seed(1234)
+    ω = np.linspace(-3.5, 3.5, 1001)
     H = np.random.normal(size=(Nm, Nm))
     Heff = H + H.T - 0.5j * np.diag(np.random.rand(Nm))
 
@@ -73,6 +89,32 @@ def _test_gradient(complex):
 def test_gradient():
     for complex in (False, True):
         _test_gradient(complex)
+
+
+@pytest.mark.benchmark(warmup=True)
+def _test_gradient_bench(benchmark, complex, diagonalize):
+    Nm, Ne, ω, Heff, g = get_bench_data(complex)
+    J = Jmod(ω, Heff, g)
+    opt = spectral_density_fitter(ω, J, Nm, diagonalize=diagonalize)
+    ps = opt.Hκg_to_ps(*randomize_Hκg(Heff, g))
+    grad = np.empty_like(ps)
+    benchmark(opt.obj_fun, ps, grad)
+
+
+def test_bench_gradient_real(benchmark):
+    _test_gradient_bench(benchmark, False, True)
+
+
+def test_bench_gradient_complex(benchmark):
+    _test_gradient_bench(benchmark, True, True)
+
+
+def test_bench_gradient_real_nodiag(benchmark):
+    _test_gradient_bench(benchmark, False, False)
+
+
+def test_bench_gradient_complex_nodiag(benchmark):
+    _test_gradient_bench(benchmark, True, False)
 
 
 def _test_fitting(complex, thresh):
