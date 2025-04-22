@@ -4,6 +4,7 @@ import warnings
 import jax
 import jax.numpy as jnp
 from jax import grad, jacobian, jit
+from functools import partial
 
 from .spectral_densities import Jmod_naive, _non_jitted_Jmod
 
@@ -29,114 +30,132 @@ class spectral_density_fitter(nlopt.nlopt.opt):
         if device is None:
             device = jax.devices("cpu")[0] if diagonalize else jax.devices()[0]
 
-        with jax.default_device(device):
-            ω = jnp.array(ω)
-            J = jnp.array(J)
-            if J.ndim == 1:
-                J = J[None, None, :]
+        self.device = device
+        self.diagonalize = diagonalize
+        self.fitlog = fitlog
+        self.λlims = λlims
+        self.Hgtmpl = Hgtmpl
+        self.algorithm = algorithm
+
+        with jax.default_device(self.device):
+            self.ω = jnp.array(ω)
+            self.J = jnp.array(J)
+            if self.J.ndim == 1:
+                self.J = self.J[None, None, :]
 
             if isinstance(Hgtmpl, tuple):
                 Htmpl, gtmpl = Hgtmpl
-                Ne, Nm = gtmpl.shape
-                assert Htmpl.shape == (Nm, Nm)
+                self.Ne, self.Nm = gtmpl.shape
+                if Htmpl.shape != (self.Nm, self.Nm):
+                    raise ValueError(f"Shapes for Htmpl ({Htmpl.shape}) and gtmpl ({gtmpl.shape}) are not consistent. Should be (Nm,Nm) and (Ne,Nm).")
             else:
-                Nm = int(Hgtmpl)
-                Ne = J.shape[0]
-                Htmpl = jnp.ones((Nm, Nm))
-                gtmpl = jnp.ones((Ne, Nm))
+                self.Nm = int(Hgtmpl)
+                self.Ne = J.shape[0]
+                Htmpl = jnp.ones((self.Nm, self.Nm))
+                gtmpl = jnp.ones((self.Ne, self.Nm))
 
-            assert J.shape == (Ne, Ne, len(ω))
+        if self.J.shape != (self.Ne, self.Ne, len(self.ω)):
+            raise ValueError(f"Input shapes are not consistent. Should be (Ne,Ne,Nω) for J (got {self.J.shape}), (Nω,) for ω (got {self.ω.shape}), and (Ne,Nm) for gtmpl (got {gtmpl.shape}).")
 
-            if fitlog and Ne > 1:
-                raise ValueError(f"fitlog=True only supported for 1 emitter. Got Ne = {Ne}.")
+        if self.fitlog and self.Ne > 1:
+            raise ValueError(f"fitlog=True only supported for 1 emitter. Got Ne = {self.Ne}.")
+        
+        Jmodfun = _non_jitted_Jmod if self.diagonalize else Jmod_naive
 
-            # get the indices of the nonzero entries in the upper triangle of Htmpl
-            H_inds = np.nonzero(np.triu(Htmpl))
-            # get the indices of the nonzero entries in gtmpl
-            g_inds = np.nonzero(gtmpl)
-            Nps_H = len(H_inds[0])
-            Nps_g = len(g_inds[0])
-            if jnp.iscomplexobj(J):
-                Nps_g *= 2
-            Nps = Nps_g + Nm + Nps_H
+        Nps, Hκg_to_ps, ps_to_Hκg, Jfun, obj_fun = make_jax_closures(self.ω, self.J, Htmpl, gtmpl, fitlog, Jmodfun, self.device)
+        self.Nps = Nps
+        self.Hκg_to_ps = Hκg_to_ps
+        self.ps_to_Hκg = ps_to_Hκg
+        self.Jfun = Jfun
+        self.obj_fun = obj_fun
 
-            tmpH = jnp.zeros((Nm, Nm))
-            tmpg = jnp.zeros((Ne, Nm),dtype=J.dtype)
 
-            def Hκg_to_ps(H, κ, g):
-                with jax.default_device(device):
-                    # the astype ensures that g is complex if J is complex, and then .view gives a real array of twice the size
-                    ps = jnp.hstack((g[g_inds].astype(J.dtype).view(κ.dtype), jnp.sqrt(κ), H[H_inds]))
-                assert ps.shape == (Nps,)
-                # commit to the device
-                return jax.device_put(ps, device)
+        super().__init__(algorithm, Nps)
+        self.set_min_objective(obj_fun)
+        self.set_ftol_rel(1e-5)
 
-            @jit
-            def ps_to_Hκg(ps):
-                gps, sqrtκ, Hps = jnp.split(ps, [Nps_g, Nps_g + Nm])
-                κ = sqrtκ**2
-                # the .view ensures that the real array gps is viewed as a complex one if J is complex
-                g = tmpg.at[g_inds].set(gps.view(J.dtype))
-                Hu = tmpH.at[H_inds].set(Hps)
-                H = Hu + jnp.tril(Hu.T, -1)
-                return H, κ, g
+        if λlims is not False:
+            λmin, λmax = (ω[0], ω[-1]) if λlims is None else λlims
+            nlopt_constraints = make_jax_constraints(λmin, λmax, ps_to_Hκg)
+            self.add_inequality_mconstraint(nlopt_constraints, np.zeros(2 * self.Nm))
 
-            if diagonalize:
 
-                def Jfun(ω, ps):
-                    H, κ, g = ps_to_Hκg(ps)
-                    Heff = H - 0.5j * jnp.diag(κ)
-                    JJ = _non_jitted_Jmod(ω, Heff, g)
-                    return JJ
-            else:
+def make_jax_closures(ω, J, Htmpl, gtmpl, fitlog, Jmodfun, device):
+    with jax.default_device(device):
+        Ne, Nm = gtmpl.shape
 
-                def Jfun(ω, ps):
-                    H, κ, g = ps_to_Hκg(ps)
-                    Heff = H - 0.5j * jnp.diag(κ)
-                    JJ = Jmod_naive(ω, Heff, g)
-                    return JJ
+        # get the indices of the nonzero entries in the upper triangle of Htmpl
+        H_inds = np.nonzero(np.triu(Htmpl))
+        # get the indices of the nonzero entries in gtmpl
+        g_inds = np.nonzero(gtmpl)
+        Nps_H = len(H_inds[0])
+        Nps_g = len(g_inds[0])
+        if jnp.iscomplexobj(J):
+            Nps_g *= 2
 
-            @jit
-            def err(ps):
-                Jf = Jfun(ω, ps)
-                assert jnp.iscomplexobj(Jf) == jnp.iscomplexobj(J)
-                if fitlog:
-                    return jnp.linalg.norm(jnp.log(Jf) - jnp.log(J))
-                else:
-                    return jnp.linalg.norm(Jf - J)
+        Nps = Nps_g + Nm + Nps_H
 
-            grad_err = jit(grad(err))
+        tmpH = jnp.zeros((Nm, Nm))
+        tmpg = jnp.zeros((Ne, Nm), dtype=J.dtype)
 
-            def nlopt_f(ps, grad):
-                if grad.size > 0:
-                    grad[...] = grad_err(ps)
-                return float(err(ps))
+    def Hκg_to_ps(H, κ, g):
+        with jax.default_device(device):
+            # the astype ensures that g is complex if J is complex, and then .view gives a real array of twice the size
+            ps = jnp.hstack((g[g_inds].astype(J.dtype).view(κ.dtype), jnp.sqrt(κ), H[H_inds]))
+        assert ps.shape == (Nps,)
+        # commit to the device
+        return jax.device_put(ps, device)
 
-            @jit
-            def f_constraints(ps):
-                "constraint function that forces eigenvalues to be within the range [λmin,λmax]"
-                H, κ, g = ps_to_Hκg(ps)
-                λs = jnp.linalg.eigvalsh(H)
-                # nlopt enforces constraint functions to be smaller than 0
-                return jnp.hstack((λs - λmax, λmin - λs))
+    @jit
+    def ps_to_Hκg(ps):
+        with jax.default_device(device):
+            gps, sqrtκ, Hps = jnp.split(ps, [Nps_g, Nps_g + Nm])
+            κ = sqrtκ**2
+            # the .view ensures that the real array gps is viewed as a complex one if J is complex
+            g = tmpg.at[g_inds].set(gps.view(J.dtype))
+            Hu = tmpH.at[H_inds].set(Hps)
+            H = Hu + jnp.tril(Hu.T, -1)
+        return H, κ, g
 
-            jac_constraints = jit(jacobian(f_constraints))
+    def _Jfun(ω, ps):
+        H, κ, g = ps_to_Hκg(ps)
+        Heff = H - 0.5j * jnp.diag(κ)
+        return Jmodfun(ω, Heff, g)
 
-            def nlopt_constraints(result, ps, grad):
-                result[...] = f_constraints(ps)
-                if grad.size > 0:
-                    grad[...] = jac_constraints(ps)
+    Jfun = jit(_Jfun)
 
-            super().__init__(algorithm, Nps)
-            self.set_min_objective(nlopt_f)
-            self.set_ftol_rel(1e-5)
+    @jit
+    def err(ps):
+        Jf = _Jfun(ω, ps)
+        assert jnp.iscomplexobj(Jf) == jnp.iscomplexobj(J)
+        if fitlog:
+            return jnp.linalg.norm(jnp.log(Jf) - jnp.log(J))
+        else:
+            return jnp.linalg.norm(Jf - J)
 
-            if λlims is not False:
-                λmin, λmax = (ω[0], ω[-1]) if λlims is None else λlims
-                self.add_inequality_mconstraint(nlopt_constraints, np.zeros(2 * Nm))
+    grad_err = jit(grad(err))
 
-            # add members to opt to have everything in a single object
-            self.Hκg_to_ps = Hκg_to_ps
-            self.ps_to_Hκg = ps_to_Hκg
-            self.Jfun = jit(Jfun)  # we can jit this because it is not used in the optimization
-            self.obj_fun = nlopt_f
+    def nlopt_f(ps, grad=None):
+        if grad is not None and grad.size > 0:
+            grad[...] = grad_err(ps)
+        return float(err(ps))
+    
+    return Nps, Hκg_to_ps, ps_to_Hκg, Jfun, nlopt_f
+
+def make_jax_constraints(λmin, λmax, ps_to_Hκg):
+    @jit
+    def f_constraints(ps):
+        "constraint function that forces eigenvalues to be within the range [λmin,λmax]"
+        H, κ, g = ps_to_Hκg(ps)
+        λs = jnp.linalg.eigvalsh(H)
+        # nlopt enforces constraint functions to be smaller than 0
+        return jnp.hstack((λs - λmax, λmin - λs))
+
+    jac_constraints = jit(jacobian(f_constraints))
+
+    def nlopt_constraints(result, ps, grad):
+        result[...] = f_constraints(ps)
+        if grad.size > 0:
+            grad[...] = jac_constraints(ps)
+
+    return nlopt_constraints
