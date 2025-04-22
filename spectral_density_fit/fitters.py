@@ -34,41 +34,39 @@ class spectral_density_fitter(nlopt.nlopt.opt):
         self.diagonalize = diagonalize
         self.fitlog = fitlog
         self.λlims = λlims
-        self.Hgtmpl = Hgtmpl
         self.algorithm = algorithm
 
         with jax.default_device(self.device):
             self.ω = jnp.array(ω)
-            self.J = jnp.array(J)
-            if self.J.ndim == 1:
-                self.J = self.J[None, None, :]
+            J = jnp.array(J)
+            if J.ndim == 1:
+                J = J[None, None, :]
+            self.J = J
 
             if isinstance(Hgtmpl, tuple):
-                Htmpl, gtmpl = Hgtmpl
+                self.Htmpl, self.gtmpl = Hgtmpl
                 self.Ne, self.Nm = gtmpl.shape
-                if Htmpl.shape != (self.Nm, self.Nm):
-                    raise ValueError(f"Shapes for Htmpl ({Htmpl.shape}) and gtmpl ({gtmpl.shape}) are not consistent. Should be (Nm,Nm) and (Ne,Nm).")
+                if self.Htmpl.shape != (self.Nm, self.Nm):
+                    raise ValueError(f"Shapes for Htmpl ({self.Htmpl.shape}) and gtmpl ({self.gtmpl.shape}) are not consistent. Should be (Nm,Nm) and (Ne,Nm).")
             else:
                 self.Nm = int(Hgtmpl)
                 self.Ne = J.shape[0]
-                Htmpl = jnp.ones((self.Nm, self.Nm))
-                gtmpl = jnp.ones((self.Ne, self.Nm))
+                self.Htmpl = jnp.ones((self.Nm, self.Nm))
+                self.gtmpl = jnp.ones((self.Ne, self.Nm))
 
         if self.J.shape != (self.Ne, self.Ne, len(self.ω)):
-            raise ValueError(f"Input shapes are not consistent. Should be (Ne,Ne,Nω) for J (got {self.J.shape}), (Nω,) for ω (got {self.ω.shape}), and (Ne,Nm) for gtmpl (got {gtmpl.shape}).")
+            raise ValueError(f"Input shapes are not consistent. Should be (Ne,Ne,Nω) for J (got {self.J.shape}), (Nω,) for ω (got {self.ω.shape}), and (Ne,Nm) for gtmpl (got {self.gtmpl.shape}).")
 
         if self.fitlog and self.Ne > 1:
             raise ValueError(f"fitlog=True only supported for 1 emitter. Got Ne = {self.Ne}.")
-        
-        Jmodfun = _non_jitted_Jmod if self.diagonalize else Jmod_naive
 
-        Nps, Hκg_to_ps, ps_to_Hκg, Jfun, obj_fun = make_jax_closures(self.ω, self.J, Htmpl, gtmpl, fitlog, Jmodfun, self.device)
+        Jmodfun = _non_jitted_Jmod if self.diagonalize else Jmod_naive
+        Nps, Hκg_to_ps, ps_to_Hκg, Jfun, obj_fun = make_jax_closures(self.ω, self.J, self.Htmpl, self.gtmpl, self.fitlog, Jmodfun, self.device)
         self.Nps = Nps
         self.Hκg_to_ps = Hκg_to_ps
         self.ps_to_Hκg = ps_to_Hκg
         self.Jfun = Jfun
         self.obj_fun = obj_fun
-
 
         super().__init__(algorithm, Nps)
         self.set_min_objective(obj_fun)
@@ -91,6 +89,8 @@ def make_jax_closures(ω, J, Htmpl, gtmpl, fitlog, Jmodfun, device):
         Nps_H = len(H_inds[0])
         Nps_g = len(g_inds[0])
         if jnp.iscomplexobj(J):
+            # for complex J and thus g, we need 2 Nps_g real fit parameters
+            # to represent the real and imaginary parts of g
             Nps_g *= 2
 
         Nps = Nps_g + Nm + Nps_H
@@ -139,8 +139,9 @@ def make_jax_closures(ω, J, Htmpl, gtmpl, fitlog, Jmodfun, device):
         if grad is not None and grad.size > 0:
             grad[...] = grad_err(ps)
         return float(err(ps))
-    
+
     return Nps, Hκg_to_ps, ps_to_Hκg, Jfun, nlopt_f
+
 
 def make_jax_constraints(λmin, λmax, ps_to_Hκg):
     @jit
