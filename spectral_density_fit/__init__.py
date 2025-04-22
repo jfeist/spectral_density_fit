@@ -24,21 +24,40 @@ def Jmod_lorentz(ω, λs, g):
     return χ.imag / jnp.pi
 
 
-"""this solves the linear equation at each frequency. it is less
-efficient than diagonalizing Heff, but jax can calculate the gradient directly,
-so we can use it as a check for our implementation. Additionally, it works with
-accelerators, for which the diagonalization of non-Hermitian matrices is not
-implemented. Due to the overall speed advantage of GPUs, this is the preferred
-method when a GPU is available.
-
-Note that the diagonalization-based routines assume that H is complex symmetric,
-H = H^T (and thus H^\\dagger = H^*), while this one does not, so it is in
-principle more general.
-"""
-
-
 @jit
 def Jmod_naive(ω, Heff, g):
+    """Compute the spectral density matrix J(ω) using a naive method that solves
+    the linear equation at each frequency. This method avoids diagonalizing the
+    effective Hamiltonian `Heff`, making it compatible with accelerators like
+    GPUs where diagonalization of non-Hermitian matrices is not implemented. It
+    is less efficient than diagonalization but allows for direct gradient
+    computation with JAX, making it useful for verification and optimization
+    tasks.
+
+    Parameters:
+    -----------
+    ω : array-like
+        A 1D array of frequencies at which to compute the spectral density.
+    Heff : array-like
+        The effective Hamiltonian matrix, assumed to be of shape (N, N).
+    g : array-like
+        The coupling vector or matrix, of shape (N,) or (N, M), where N is the
+        dimension of the Hamiltonian and M is the number of coupling channels.
+
+    Returns:
+    --------
+    array-like
+        The spectral density matrix J(ω), with shape (M, M, len(ω)).
+
+    Notes:
+    ------
+    - If `g` is complex and has more than one element, the resulting spectral
+      density matrix J(ω) is Hermitian with complex off-diagonal elements. In
+      this case, Heff does not need to be complex symmetric.
+    - If `g` is real or has only one element, `Heff` is assumed to be complex
+      symmetric, and the resulting spectral density matrix J(ω) is
+      explicitly real.
+    """
     II = jnp.eye(Heff.shape[0])
     Hω = Heff[None, :, :] - ω[:, None, None] * II[None, :, :]
     # χ = 1/(H-w)
@@ -71,6 +90,31 @@ def _non_jitted_Jmod(ω, Heff, g):
 
 
 def Jmod(ω, Heff, g):
+    """Compute the spectral density matrix J(ω) by diagonalizing the effective
+    Hamiltonian `Heff`, which is assumed to be complex symmetric. This method is
+    in principle more efficient than solving the linear equation at each
+    frequency, but for now is not compatible with accelerators like GPUs, for
+    which diagonalization of non-Hermitian matrices is not implemented in jax.
+    The gradient of complex matrix diagonalization is not provided by jax, so
+    the gradient of the crucial step in the algorithm is implemented manually.
+
+    Parameters:
+    -----------
+    ω : array-like
+        A 1D array of frequencies at which to compute the spectral density.
+    Heff : array-like
+        The effective Hamiltonian matrix, assumed to be of shape (N, N), and to
+        be complex symmetric.
+    g : array-like
+        The coupling vector or matrix, of shape (N,) or (N, M), where N is the
+        dimension of the Hamiltonian and M is the number of coupling channels.
+
+    Returns:
+    --------
+    array-like
+        The spectral density matrix J(ω), with shape (M, M, len(ω)). It is real if
+        `g` is real, and complex if `g` is complex.
+    """
     # diagonalization is not supported on GPUs, so we need to run this on CPU
     with jax.default_device(jax.devices("cpu")[0]):
         return jit(_non_jitted_Jmod)(ω, Heff, g)
