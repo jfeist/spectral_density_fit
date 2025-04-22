@@ -56,44 +56,30 @@ class spectral_density_fitter(nlopt.nlopt.opt):
             g_inds = np.nonzero(gtmpl)
             Nps_H = len(H_inds[0])
             Nps_g = len(g_inds[0])
+            if jnp.iscomplexobj(J):
+                Nps_g *= 2
+            Nps = Nps_g + Nm + Nps_H
 
             tmpH = jnp.zeros((Nm, Nm))
-            tmpg = jnp.zeros((Ne, Nm))
+            tmpg = jnp.zeros((Ne, Nm),dtype=J.dtype)
 
-            if jnp.iscomplexobj(J):
-                Nps = 2 * Nps_g + Nm + Nps_H
+            def Hκg_to_ps(H, κ, g):
+                with jax.default_device(device):
+                    # the astype ensures that g is complex if J is complex, and then .view gives a real array of twice the size
+                    ps = jnp.hstack((g[g_inds].astype(J.dtype).view(κ.dtype), jnp.sqrt(κ), H[H_inds]))
+                assert ps.shape == (Nps,)
+                # commit to the device
+                return jax.device_put(ps, device)
 
-                def Hκg_to_ps(H, κ, g):
-                    with jax.default_device(device):
-                        ps = jnp.hstack((g[g_inds].real, g[g_inds].imag, jnp.sqrt(κ), H[H_inds]))
-                    # commit to the device
-                    return jax.device_put(ps, device)
-
-                @jit
-                def ps_to_Hκg(ps):
-                    gps, gpsc, sqrtκ, Hps = jnp.split(ps, [Nps_g, 2 * Nps_g, 2 * Nps_g + Nm])
-                    κ = sqrtκ**2
-                    g = tmpg.at[g_inds].set(gps) + 1j * tmpg.at[g_inds].set(gpsc)
-                    Hu = tmpH.at[H_inds].set(Hps)
-                    H = Hu + jnp.tril(Hu.T, -1)
-                    return H, κ, g
-            else:
-                Nps = Nps_g + Nm + Nps_H
-
-                def Hκg_to_ps(H, κ, g):
-                    with jax.default_device(device):
-                        ps = jnp.hstack((g[g_inds], jnp.sqrt(κ), H[H_inds]))
-                    # commit to the device
-                    return jax.device_put(ps, device)
-
-                @jit
-                def ps_to_Hκg(ps):
-                    gps, sqrtκ, Hps = jnp.split(ps, [Nps_g, Nps_g + Nm])
-                    κ = sqrtκ**2
-                    g = tmpg.at[g_inds].set(gps)
-                    Hu = tmpH.at[H_inds].set(Hps)
-                    H = Hu + jnp.tril(Hu.T, -1)
-                    return H, κ, g
+            @jit
+            def ps_to_Hκg(ps):
+                gps, sqrtκ, Hps = jnp.split(ps, [Nps_g, Nps_g + Nm])
+                κ = sqrtκ**2
+                # the .view ensures that the real array gps is viewed as a complex one if J is complex
+                g = tmpg.at[g_inds].set(gps.view(J.dtype))
+                Hu = tmpH.at[H_inds].set(Hps)
+                H = Hu + jnp.tril(Hu.T, -1)
+                return H, κ, g
 
             if diagonalize:
 
