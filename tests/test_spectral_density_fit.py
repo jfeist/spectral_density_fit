@@ -9,7 +9,7 @@ jax.config.update("jax_enable_x64", True)
 
 
 def test_version():
-    assert __version__ == "0.2.0"
+    assert __version__ == "0.2.1"
 
 
 def get_test_data(complex):
