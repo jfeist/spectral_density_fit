@@ -45,7 +45,7 @@ class spectral_density_fitter(nlopt.nlopt.opt):
 
             if isinstance(Hgtmpl, tuple):
                 self.Htmpl, self.gtmpl = Hgtmpl
-                self.Ne, self.Nm = gtmpl.shape
+                self.Ne, self.Nm = self.gtmpl.shape
                 if self.Htmpl.shape != (self.Nm, self.Nm):
                     raise ValueError(f"Shapes for Htmpl ({self.Htmpl.shape}) and gtmpl ({self.gtmpl.shape}) are not consistent. Should be (Nm,Nm) and (Ne,Nm).")
             else:
