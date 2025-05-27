@@ -73,7 +73,7 @@ class spectral_density_fitter(nlopt.nlopt.opt):
         self.set_ftol_rel(1e-5)
 
         if λlims is not False:
-            λmin, λmax = (ω[0], ω[-1]) if λlims is None else λlims
+            λmin, λmax = (ω.min(), ω.max()) if λlims is None else λlims
             nlopt_constraints = make_jax_constraints(λmin, λmax, ps_to_Hκg)
             self.add_inequality_mconstraint(nlopt_constraints, np.zeros(2 * self.Nm))
 
