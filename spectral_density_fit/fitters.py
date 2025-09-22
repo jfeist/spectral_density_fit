@@ -9,7 +9,7 @@ from functools import partial
 from .spectral_densities import Jmod_naive, _non_jitted_Jmod
 
 
-class spectral_density_fitter(nlopt.nlopt.opt):
+class spectral_density_fitter(nlopt.opt):
     # version that allows to pass "templates" for H and g that
     # indicate where they are allowed to be nonzero in the fit
     def __init__(self, ω, J, Hgtmpl, λlims=None, fitlog=False, diagonalize=None, device=None, algorithm=nlopt.LD_CCSAQ):
