@@ -16,12 +16,22 @@ The documentation is automatically built and deployed from the `main` branch. It
 - API reference with detailed function documentation
 - Multiple examples for various use cases
 
-To build the documentation locally:
+### Building Documentation Locally
 
+To build the documentation locally, install the documentation dependencies and build with Sphinx:
+
+**Using pip:**
 ```bash
-pip install sphinx sphinx-rtd-theme
+pip install -e ".[docs]"
 cd docs
 make html
+# Open docs/_build/html/index.html in your browser
+```
+
+**Using uv (recommended):**
+```bash
+uv sync --group docs
+uv run sphinx-build -b html docs docs/_build/html
 # Open docs/_build/html/index.html in your browser
 ```
 

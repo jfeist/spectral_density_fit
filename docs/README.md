@@ -10,12 +10,31 @@ The documentation is automatically built and deployed from the `main` branch via
 
 ## Building the Documentation Locally
 
-To build the HTML documentation locally:
+The project uses Sphinx for documentation. Documentation dependencies are managed as an optional dependency group.
+
+**Using pip:**
 
 ```bash
-pip install sphinx sphinx-rtd-theme
+# Install the package with documentation dependencies
+pip install -e ".[docs]"
+
+# Build the documentation
 cd docs
 make html
+```
+
+**Using uv (recommended):**
+
+```bash
+# Sync dependencies including the docs group
+uv sync --group docs
+
+# Build the documentation
+uv run sphinx-build -b html docs docs/_build/html
+
+# Or use make (which will use sphinx-build from the virtual environment)
+cd docs
+uv run make html
 ```
 
 The built documentation will be in `_build/html/`. Open `_build/html/index.html` in your browser to view it.
