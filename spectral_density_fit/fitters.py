@@ -14,11 +14,11 @@ class spectral_density_fitter(nlopt.opt):
     This class implements the fitting procedure from I. Medina, F. J. García-Vidal,
     A. I. Fernández-Domínguez, and J. Feist, Phys. Rev. Lett. 126, 093601 (2021),
     https://doi.org/10.1103/PhysRevLett.126.093601, to represent a spectral density
-    J(ω) by a few-mode model with effective Hamiltonian H_eff and coupling g.
+    J(ω) by a few-mode model with real symmetric Hamiltonian H, decay rates κ, and 
+    coupling g. The effective Hamiltonian is H_eff = H - 0.5j * diag(κ).
 
-    The fitter optimizes the parameters of the effective Hamiltonian and coupling
-    to minimize the difference between the target spectral density and the model
-    spectral density computed from the few-mode parameters.
+    The fitter optimizes the parameters of H, κ, and g to minimize the difference 
+    between the target spectral density and the model spectral density.
 
     Parameters
     ----------

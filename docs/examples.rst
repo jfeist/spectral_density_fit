@@ -20,17 +20,23 @@ This example demonstrates fitting a simple Lorentzian spectral density.
 
     # Define frequency range and target spectral density
     ω = np.linspace(-5, 5, 201)
-    γ = 0.2
-    ω0 = 1.0
-    J_target = γ / ((ω - ω0)**2 + γ**2)
+    
+    # Single Lorentzian with proper spectral density form: g² κ / (2π) / ((ω - ω0)² + (κ/2)²)
+    # where κ is the decay rate and κ/2 is the FWHM
+    ω0 = 1.0  # resonance frequency
+    κ = 0.4   # decay rate (FWHM = κ/2 = 0.2)
+    g = 0.3   # coupling strength
+    J_target = (g**2 * κ / (2 * np.pi)) / ((ω - ω0)**2 + (κ/2)**2)
 
-    # Fit with 3 modes
-    Nm = 3
+    # Fit with 1 mode (matching the single Lorentzian)
+    Nm = 1
     fitter = spectral_density_fitter(ω, J_target, Nm)
 
-    # Initialize with small random values
-    np.random.seed(42)
-    ps0 = np.random.normal(size=fitter.Nps) * 0.1
+    # Initialize with reasonable guesses based on the target
+    H_init = np.array([[ω0]])  # Hamiltonian with resonance frequency
+    κ_init = np.array([κ])     # Decay rate
+    g_init = np.array([[g]])   # Coupling strength
+    ps0 = fitter.Hκg_to_ps(H_init, κ_init, g_init)
 
     # Optimize
     ps_opt = fitter.optimize(ps0)
@@ -39,7 +45,7 @@ This example demonstrates fitting a simple Lorentzian spectral density.
     J_fit = fitter.Jfun(ω, ps_opt)
 
     # Extract parameters
-    H, κ, g = fitter.ps_to_Hκg(ps_opt)
+    H, κ_fit, g_fit = fitter.ps_to_Hκg(ps_opt)
 
     # Plot results
     plt.figure(figsize=(12, 5))
@@ -67,9 +73,9 @@ This example demonstrates fitting a simple Lorentzian spectral density.
 
     # Print parameters
     print(f"Fit error: {np.linalg.norm(J_fit - J_target[None, None, :]):.6e}")
-    print(f"\\nEffective Hamiltonian H:\\n{H}")
-    print(f"\\nDecay rates κ:\\n{κ}")
-    print(f"\\nCoupling g:\\n{g}")
+    print(f"\\nReal symmetric Hamiltonian H:\\n{H}")
+    print(f"\\nDecay rates κ:\\n{κ_fit}")
+    print(f"\\nCoupling g:\\n{g_fit}")
 
 Example 2: Multiple Lorentzians
 --------------------------------
@@ -89,19 +95,25 @@ Fitting a spectral density with multiple peaks.
     ω = np.linspace(-10, 10, 401)
 
     # Create a spectral density with three Lorentzian peaks
-    J_target = (
-        0.3 / ((ω - 2.0)**2 + 0.1**2) +
-        0.5 / ((ω + 0.0)**2 + 0.2**2) +
-        0.4 / ((ω + 3.0)**2 + 0.15**2)
+    # Using proper spectral density form: g² κ / (2π) / ((ω - ω0)² + (κ/2)²)
+    ω_peaks = [2.0, 0.0, -3.0]    # resonance frequencies
+    κ_peaks = [0.4, 0.6, 0.5]     # decay rates
+    g_peaks = [0.35, 0.45, 0.40]  # coupling strengths
+    
+    J_target = sum(
+        (g**2 * κ / (2 * np.pi)) / ((ω - ω0)**2 + (κ/2)**2)
+        for ω0, κ, g in zip(ω_peaks, κ_peaks, g_peaks)
     )
 
-    # Fit with 6 modes
-    Nm = 6
+    # Fit with 3 modes (matching the three Lorentzians)
+    Nm = 3
     fitter = spectral_density_fitter(ω, J_target, Nm)
 
-    # Initialize
-    np.random.seed(42)
-    ps0 = np.random.normal(size=fitter.Nps) * 0.1
+    # Initialize with reasonable guesses based on the peaks
+    H_init = np.diag(ω_peaks)           # Diagonal Hamiltonian with peak frequencies
+    κ_init = np.array(κ_peaks)          # Decay rates
+    g_init = np.array([g_peaks])        # Coupling strengths (shape: (1, 3))
+    ps0 = fitter.Hκg_to_ps(H_init, κ_init, g_init)
 
     # Optimize
     ps_opt = fitter.optimize(ps0)
@@ -149,9 +161,12 @@ Fitting an Ohmic spectral density with exponential cutoff.
     # Use logarithmic fitting for better accuracy across orders of magnitude
     fitter = spectral_density_fitter(ω, J_target, Nm, fitlog=True)
 
-    # Initialize
-    np.random.seed(42)
-    ps0 = np.random.normal(size=fitter.Nps) * 0.1
+    # Initialize with reasonable guesses
+    # Distribute modes across the frequency range
+    H_init = np.diag(np.linspace(0.5, 8, Nm))  # Spread resonances across range
+    κ_init = np.ones(Nm) * 2.0                 # Start with moderate decay rates
+    g_init = np.ones((1, Nm)) * 0.1            # Start with small couplings
+    ps0 = fitter.Hκg_to_ps(H_init, κ_init, g_init)
 
     # Optimize
     ps_opt = fitter.optimize(ps0)
@@ -293,8 +308,14 @@ Restricting the structure of the Hamiltonian and coupling.
     # Frequency range
     ω = np.linspace(-5, 5, 201)
 
-    # Target spectral density (single emitter)
-    J_target = 0.2 / ((ω - 1.0)**2 + 0.1**2) + 0.3 / ((ω + 1.5)**2 + 0.15**2)
+    # Target spectral density with two Lorentzian peaks (proper form: g² κ / (2π))
+    ω_peaks = [1.0, -1.5]
+    κ_peaks = [0.4, 0.6]
+    g_peaks = [0.28, 0.35]
+    J_target = sum(
+        (g**2 * κ / (2 * np.pi)) / ((ω - ω0)**2 + (κ/2)**2)
+        for ω0, κ, g in zip(ω_peaks, κ_peaks, g_peaks)
+    )
 
     # Create templates
     Nm = 4
@@ -309,9 +330,11 @@ Restricting the structure of the Hamiltonian and coupling.
     # Fit with templates
     fitter = spectral_density_fitter(ω, J_target, (Htmpl, gtmpl))
 
-    # Initialize
-    np.random.seed(42)
-    ps0 = np.random.normal(size=fitter.Nps) * 0.1
+    # Initialize with reasonable guesses
+    H_init = np.diag(np.linspace(-2, 2, Nm))  # Spread diagonal values
+    κ_init = np.ones(Nm) * 0.5                # Moderate decay rates
+    g_init = np.ones((Ne, Nm)) * 0.2          # Small couplings
+    ps0 = fitter.Hκg_to_ps(H_init, κ_init, g_init)
 
     # Optimize
     ps_opt = fitter.optimize(ps0)

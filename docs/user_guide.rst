@@ -8,8 +8,11 @@ The Few-Mode Model
 
 The package fits an arbitrary spectral density J(ω) with a few-mode model described by:
 
-- An effective Hamiltonian ``H_eff = H - 0.5j * diag(κ)``
+- A real symmetric Hamiltonian ``H``
+- Decay rates ``κ`` (positive real values)
 - A coupling matrix ``g``
+
+The effective Hamiltonian is ``H_eff = H - 0.5j * diag(κ)`` (complex symmetric).
 
 The spectral density is then computed as:
 

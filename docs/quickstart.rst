@@ -58,11 +58,11 @@ The fitter returns a parameter vector ``ps_opt`` that can be converted back to p
 
 Where:
 
-- ``H`` is the effective Hamiltonian (complex symmetric matrix)
+- ``H`` is the real symmetric Hamiltonian matrix
 - ``κ`` are the decay rates (positive real values)
 - ``g`` is the coupling matrix
 
-The effective Hamiltonian used in the spectral density calculation is ``H_eff = H - 0.5j * diag(κ)``.
+The effective Hamiltonian used in the spectral density calculation is ``H_eff = H - 0.5j * diag(κ)``, which is complex symmetric.
 
 Plotting the Results
 --------------------
