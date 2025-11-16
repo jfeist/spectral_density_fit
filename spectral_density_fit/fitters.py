@@ -4,7 +4,6 @@ import warnings
 import jax
 import jax.numpy as jnp
 from jax import grad, jacobian, jit
-from functools import partial
 
 from .spectral_densities import Jmod_naive, _non_jitted_Jmod
 

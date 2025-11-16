@@ -6,7 +6,7 @@ https://doi.org/10.1103/PhysRevLett.126.093601
 """
 
 __version__ = "0.2.1"
-__all__ = ["spectral_density_fitter"]
+__all__ = ["spectral_density_fitter", "Jmod", "Jmod_naive"]
 
 from .spectral_densities import Jmod, Jmod_naive
 from .fitters import spectral_density_fitter
