@@ -34,6 +34,9 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
+# Copy .nojekyll file to the build directory for GitHub Pages
+html_extra_path = ['.nojekyll']
+
 # Napoleon settings for NumPy-style docstrings
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True

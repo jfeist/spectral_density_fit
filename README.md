@@ -7,7 +7,16 @@ This package can be used to perform few-mode quantization for multiple emitters 
 
 ## Documentation
 
-**Full documentation is available in the `docs/` directory.** To build and view the documentation:
+**📖 [Read the documentation online](https://jfeist.github.io/spectral_density_fit/)**
+
+The documentation is automatically built and deployed from the `main` branch. It includes:
+- Installation instructions
+- Quick start guide
+- Comprehensive user guide
+- API reference with detailed function documentation
+- Multiple examples for various use cases
+
+To build the documentation locally:
 
 ```bash
 pip install sphinx sphinx-rtd-theme
@@ -15,13 +24,6 @@ cd docs
 make html
 # Open docs/_build/html/index.html in your browser
 ```
-
-The documentation includes:
-- Installation instructions
-- Quick start guide
-- Comprehensive user guide
-- API reference with detailed function documentation
-- Multiple examples for various use cases
 
 ## Installation
 

@@ -2,7 +2,13 @@
 
 This directory contains the Sphinx documentation for the spectral_density_fit package.
 
-## Building the Documentation
+## Online Documentation
+
+📖 **The documentation is available online at: https://jfeist.github.io/spectral_density_fit/**
+
+The documentation is automatically built and deployed from the `main` branch via GitHub Actions.
+
+## Building the Documentation Locally
 
 To build the HTML documentation locally:
 
