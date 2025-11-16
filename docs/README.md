@@ -10,20 +10,9 @@ The documentation is automatically built and deployed from the `main` branch via
 
 ## Building the Documentation Locally
 
-The project uses Sphinx for documentation. Documentation dependencies are managed as an optional dependency group.
+The project uses Sphinx for documentation. Documentation dependencies are managed as a dependency group (PEP 735).
 
-**Using pip:**
-
-```bash
-# Install the package with documentation dependencies
-pip install -e ".[docs]"
-
-# Build the documentation
-cd docs
-make html
-```
-
-**Using uv (recommended):**
+**Requirements:** Python 3.9+ and uv (recommended)
 
 ```bash
 # Sync dependencies including the docs group
@@ -32,7 +21,7 @@ uv sync --group docs
 # Build the documentation
 uv run sphinx-build -b html docs docs/_build/html
 
-# Or use make (which will use sphinx-build from the virtual environment)
+# Or use make
 cd docs
 uv run make html
 ```
