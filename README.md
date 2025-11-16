@@ -54,7 +54,7 @@ jax.config.update("jax_enable_x64", True)
 J_target = 0.1 / (ω**2 + 0.1**2)  # Lorentzian
 
 # Fit with 3 modes
-fitter = spectral_density_fitter(ω, J_target, Nm=3)
+fitter = spectral_density_fitter(ω, J_target, 3)
 
 # Initial guess
 ps0 = np.random.normal(size=fitter.Nps) * 0.1

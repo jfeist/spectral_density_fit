@@ -94,7 +94,7 @@ class spectral_density_fitter(nlopt.opt):
     >>> J_target = 0.1 / (ω**2 + 0.1**2)  # Lorentzian spectral density
     >>> 
     >>> # Fit with 3 modes
-    >>> fitter = spectral_density_fitter(ω, J_target, Nm=3)
+    >>> fitter = spectral_density_fitter(ω, J_target, 3)
     >>> 
     >>> # Initial guess (random)
     >>> ps0 = np.random.normal(size=fitter.Nps)
