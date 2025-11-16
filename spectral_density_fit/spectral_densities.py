@@ -6,6 +6,26 @@ from functools import partial
 
 @jit
 def Jmod_lorentz(ω, λs, g):
+    """Compute the spectral density matrix J(ω) using the Lorentzian form.
+
+    This function directly computes the spectral density from eigenvalues and
+    eigenvector projections of the coupling. It's equivalent to Jmod but bypasses
+    the diagonalization step when eigenvalues and projections are already known.
+
+    Parameters
+    ----------
+    ω : array-like
+        A 1D array of frequencies at which to compute the spectral density.
+    λs : array-like
+        The eigenvalues of the effective Hamiltonian, shape (Nm,).
+    g : array-like
+        The projection of the coupling onto eigenvectors, shape (Ne, Nm).
+
+    Returns
+    --------
+    array-like
+        The spectral density matrix J(ω), with shape (Ne, Ne, len(ω)).
+    """
     χ = jnp.einsum("il,jl,lw->ijw", g, g, 1 / (λs[:, None] - ω[None, :]))
     return χ.imag / jnp.pi
 
