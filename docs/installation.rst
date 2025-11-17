@@ -4,7 +4,7 @@ Installation
 Requirements
 ------------
 
-The package requires Python 3.7 or later, along with the following dependencies:
+The package requires Python 3.9 or later, along with the following dependencies:
 
 * numpy ≥ 1.15
 * jax ≥ 0.3
@@ -43,17 +43,3 @@ If you want to develop the package, we recommend using `uv <https://docs.astral.
 
        uv run ruff check
        uv run ruff format
-
-Configuring JAX Precision
---------------------------
-
-.. important::
-
-    The package requires 64-bit precision for accurate fitting. You must configure JAX **before** importing or using the package:
-
-    .. code-block:: python
-
-        import jax
-        jax.config.update("jax_enable_x64", True)
-
-    Without this configuration, you will receive a runtime warning, and fitting accuracy may be reduced.

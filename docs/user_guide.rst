@@ -6,19 +6,19 @@ This guide provides detailed information on using spectral_density_fit for vario
 The Few-Mode Model
 ------------------
 
-The package fits an arbitrary spectral density J(ω) with a few-mode model described by:
+The package fits an arbitrary spectral density :math:`J(\omega)` with a few-mode model described by:
 
-- A real symmetric Hamiltonian ``H``
-- Decay rates ``κ`` (positive real values)
-- A coupling matrix ``g``
+- A real symmetric coupling matrix ``H`` (of size ``Nm x Nm``)
+- Decay rates ``κ`` (positive real vector of size ``Nm``)
+- A coupling matrix ``g`` (of size ``Ne x Nm``)
 
-The effective Hamiltonian is ``H_eff = H - 0.5j * diag(κ)`` (complex symmetric).
+The complex symmetric effective coupling matrix is :math:`H_{\text{eff}} = H - \frac{i}{2} \mathrm{diag}(\kappa)`.
 
 The spectral density is then computed as:
 
 .. math::
 
-    J(\omega) = \frac{1}{\pi} \text{Im}\left[g^\dagger \frac{1}{H_{\text{eff}} - \omega I} g\right]
+    J(\omega) = \frac{1}{\pi} g^\dagger \operatorname{Im}\left[\frac{1}{H_{\text{eff}} - \omega I}\right] g
 
 Basic Fitting
 -------------
@@ -26,7 +26,7 @@ Basic Fitting
 Single Emitter
 ~~~~~~~~~~~~~~
 
-For a single emitter, provide a 1D array of spectral density values:
+For a single emitter, provide a 1D array of spectral density values. Here's a complete example fitting a simple Lorentzian:
 
 .. code-block:: python
 
@@ -34,14 +34,44 @@ For a single emitter, provide a 1D array of spectral density values:
     import numpy as np
     from spectral_density_fit import spectral_density_fitter
 
+    # Enable 64-bit precision
     jax.config.update("jax_enable_x64", True)
 
-    ω = np.linspace(-5, 5, 200)
-    J = ...  # Your spectral density data (shape: (Nω,))
-    
-    # Fit with Nm modes
-    Nm = 5
-    fitter = spectral_density_fitter(ω, J, Nm)
+    # Define frequency range and target spectral density
+    ω = np.linspace(0, 5, 201)
+
+    # Single Lorentzian with proper spectral density form: g² κ / (2π) / ((ω - ω0)² + (κ/2)²)
+    # where g is the coupling strength, ω0 is the resonance frequency and κ is the decay rate
+    ω0 = 2.0  # resonance frequency
+    κ = 0.4   # decay rate
+    g = 0.3   # coupling strength
+    J_target = (g**2 * κ / (2 * np.pi)) / ((ω - ω0)**2 + (κ/2)**2)
+
+    # Fit with 1 mode (matching the single Lorentzian)
+    Nm = 1
+    fitter = spectral_density_fitter(ω, J_target, Nm)
+
+    # Initialize with reasonable guesses
+    H_init = np.array([[1.9]])   # Coupling matrix with resonance frequency
+    κ_init = np.array([0.3])     # Decay rate
+    g_init = np.array([[0.2]])   # Coupling strength
+    ps0 = fitter.Hκg_to_ps(H_init, κ_init, g_init)
+
+    # Optimize
+    ps_opt = fitter.optimize(ps0)
+
+    # Get fitted spectral density
+    J_fit = fitter.Jfun(ω, ps_opt)
+
+    # Extract parameters
+    H, κ_fit, g_fit = fitter.ps_to_Hκg(ps_opt)
+
+    # Print parameters
+    error = np.linalg.norm(J_fit - J_target[None, None, :])
+    print(f"Fit error: {error:.6e}")
+    print(f"Real symmetric coupling matrix H: {H}")
+    print(f"Decay rates κ: {κ_fit}")
+    print(f"Coupling g: {g_fit}")
 
 Multiple Emitters
 ~~~~~~~~~~~~~~~~~
@@ -51,16 +81,10 @@ For multiple emitters, provide a 3D array where J[i, j, k] represents the cross-
 .. code-block:: python
 
     Ne = 3  # Number of emitters
-    J = np.zeros((Ne, Ne, len(ω)), dtype=complex)
+    J = np.zeros((Ne, Ne, len(ω)))
     
-    # Fill diagonal with spectral densities
-    J[0, 0, :] = ...  # Spectral density for emitter 1
-    J[1, 1, :] = ...  # Spectral density for emitter 2
-    J[2, 2, :] = ...  # Spectral density for emitter 3
-    
-    # Fill off-diagonal with cross-spectral densities (if any)
-    J[0, 1, :] = ...
-    J[1, 0, :] = J[0, 1, :].conj()  # Hermitian symmetry
+    # Fill with spectral densities
+    J[:, :, :] = ...  # Your spectral density data (shape: (Ne, Ne, Nω))
     
     fitter = spectral_density_fitter(ω, J, Nm)
 
@@ -152,23 +176,6 @@ Good initial conditions are important for convergence:
     g_guess = ...
     ps0 = fitter.Hκg_to_ps(H_guess, κ_guess, g_guess)
 
-Monitoring Progress
-~~~~~~~~~~~~~~~~~~~
-
-You can add a callback to monitor optimization progress:
-
-.. code-block:: python
-
-    import nlopt
-    
-    def callback(ps, obj_val):
-        print(f"Objective value: {obj_val:.6e}")
-        # Return > 0 to stop optimization
-        return 0
-    
-    fitter = spectral_density_fitter(ω, J, Nm)
-    # Note: Not all NLopt algorithms support callbacks
-
 Changing Optimization Algorithm
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -220,7 +227,7 @@ Using Jmod (Diagonalization)
     from spectral_density_fit import Jmod
     import jax.numpy as jnp
     
-    # Create effective Hamiltonian
+    # Create effective coupling matrix
     H = ...  # Complex symmetric matrix
     κ = ...  # Decay rates
     g = ...  # Coupling

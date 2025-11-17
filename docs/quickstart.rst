@@ -3,6 +3,20 @@ Quick Start
 
 This page provides a quick introduction to using spectral_density_fit.
 
+Configuring JAX Precision
+--------------------------
+
+.. important::
+
+    The package requires 64-bit precision for accurate fitting. You must configure JAX **before** using the package:
+
+    .. code-block:: python
+
+        import jax
+        jax.config.update("jax_enable_x64", True)
+
+    Without this configuration, you will receive a runtime warning, and fitting accuracy may be reduced.
+
 Basic Example
 -------------
 
@@ -14,25 +28,30 @@ Here's a simple example that fits a Lorentzian spectral density:
     import numpy as np
     from spectral_density_fit import spectral_density_fitter
 
-    # Enable 64-bit precision (required for accurate fitting)
+    # Enable 64-bit precision
     jax.config.update("jax_enable_x64", True)
 
-    # Create a frequency array
-    ω = np.linspace(-3, 3, 100)
+    # Define frequency range and target spectral density
+    ω = np.linspace(0, 5, 201)
 
-    # Define a target Lorentzian spectral density
-    γ = 0.1
-    ω0 = 0.5
-    J_target = γ / ((ω - ω0)**2 + γ**2)
+    # Single Lorentzian with proper spectral density form: g² κ / (2π) / ((ω - ω0)² + (κ/2)²)
+    # where g is the coupling strength, ω0 is the resonance frequency and κ is the decay rate
+    ω0 = 2.0  # resonance frequency
+    κ = 0.4   # decay rate
+    g = 0.3   # coupling strength
+    J_target = (g**2 * κ / (2 * np.pi)) / ((ω - ω0)**2 + (κ/2)**2)
 
-    # Fit with 3 modes
-    Nm = 3
+    # Fit with 1 mode (matching the single Lorentzian)
+    Nm = 1
     fitter = spectral_density_fitter(ω, J_target, Nm)
 
-    # Initial guess
-    ps0 = np.random.normal(size=fitter.Nps) * 0.1
+    # Initialize with reasonable guesses
+    H_init = np.array([[1.9]])   # Coupling matrix with resonance frequency
+    κ_init = np.array([0.3])     # Decay rate
+    g_init = np.array([[0.2]])   # Coupling strength
+    ps0 = fitter.Hκg_to_ps(H_init, κ_init, g_init)
 
-    # Run optimization
+    # Optimize
     ps_opt = fitter.optimize(ps0)
 
     # Get fitted spectral density
@@ -62,7 +81,7 @@ Where:
 - ``κ`` are the decay rates (positive real values)
 - ``g`` is the coupling matrix
 
-The effective Hamiltonian used in the spectral density calculation is ``H_eff = H - 0.5j * diag(κ)``, which is complex symmetric.
+The effective Hamiltonian used in the spectral density calculation is :math:`H_\mathrm{eff} = H - \frac{i}{2} \mathrm{diag}(\kappa)`, which is complex symmetric.
 
 Plotting the Results
 --------------------
