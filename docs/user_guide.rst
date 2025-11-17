@@ -1,7 +1,24 @@
 User Guide
 ==========
 
-This guide provides detailed information on using spectral_density_fit for various fitting scenarios.
+This guide provides comprehensive information on using spectral_density_fit for various fitting scenarios.
+
+Getting Started
+---------------
+
+Configuring JAX Precision
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. important::
+
+    The package requires 64-bit precision for accurate fitting. You must configure JAX **before** using the package:
+
+    .. code-block:: python
+
+        import jax
+        jax.config.update("jax_enable_x64", True)
+
+    Without this configuration, you will receive a runtime warning, and fitting accuracy may be reduced.
 
 The Few-Mode Model
 ------------------
@@ -20,13 +37,10 @@ The spectral density is then computed as:
 
     J(\omega) = \frac{1}{\pi} g^\dagger \operatorname{Im}\left[\frac{1}{H_{\text{eff}} - \omega I}\right] g
 
-Basic Fitting
--------------
+Quick Start Example
+-------------------
 
-Single Emitter
-~~~~~~~~~~~~~~
-
-For a single emitter, provide a 1D array of spectral density values. Here's a complete example fitting a simple Lorentzian:
+Here's a simple example that demonstrates the basic workflow for fitting a Lorentzian spectral density:
 
 .. code-block:: python
 
@@ -34,7 +48,7 @@ For a single emitter, provide a 1D array of spectral density values. Here's a co
     import numpy as np
     from spectral_density_fit import spectral_density_fitter
 
-    # Enable 64-bit precision
+    # Enable 64-bit precision (required)
     jax.config.update("jax_enable_x64", True)
 
     # Define frequency range and target spectral density
@@ -60,23 +74,47 @@ For a single emitter, provide a 1D array of spectral density values. Here's a co
     # Optimize
     ps_opt = fitter.optimize(ps0)
 
-    # Get fitted spectral density
+    # Get fitted spectral density and extract parameters
     J_fit = fitter.Jfun(ω, ps_opt)
-
-    # Extract parameters
     H, κ_fit, g_fit = fitter.ps_to_Hκg(ps_opt)
 
-    # Print parameters
+    # Compute the fit quality
     error = np.linalg.norm(J_fit - J_target[None, None, :])
     print(f"Fit error: {error:.6e}")
     print(f"Real symmetric coupling matrix H: {H}")
     print(f"Decay rates κ: {κ_fit}")
     print(f"Coupling g: {g_fit}")
 
+Understanding the Parameters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The fitter returns a parameter vector ``ps_opt`` that encodes the physical parameters:
+
+- ``H``: Real symmetric coupling matrix of shape ``(Nm, Nm)``
+- ``κ``: Decay rates (positive real values) of shape ``(Nm,)``
+- ``g``: Coupling matrix of shape ``(Ne, Nm)``
+
+The effective coupling matrix used in the spectral density calculation is :math:`H_\mathrm{eff} = H - \frac{i}{2} \mathrm{diag}(\kappa)`, which is complex symmetric.
+
+You can visualize the results with matplotlib:
+
+.. code-block:: python
+
+    import matplotlib.pyplot as plt
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(ω, J_target, 'k-', linewidth=2, label='Target')
+    plt.plot(ω, J_fit[0, 0, :], 'r--', linewidth=2, label='Fit')
+    plt.xlabel('Frequency ω')
+    plt.ylabel('Spectral density J(ω)')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+
 Multiple Emitters
 ~~~~~~~~~~~~~~~~~
 
-For multiple emitters, provide a 3D array where J[i, j, k] represents the cross-spectral density between emitters i and j at frequency ω[k]:
+For multiple emitters, provide a 3D array where J[i, j, k] represents the cross-spectral density between emitters i and j at frequency ω[k]. The number of emitters ``Ne`` is automatically inferred from the shape of ``J``.
 
 .. code-block:: python
 
@@ -94,7 +132,9 @@ Advanced Features
 Custom Templates
 ~~~~~~~~~~~~~~~~
 
-You can restrict which elements of H and g can be nonzero using templates:
+You can restrict which elements of H and g can be nonzero using templates. To do so, pass a tuple ``(Htmpl, gtmpl)`` instead of ``Nm`` when creating the fitter.
+Here, ``Htmpl`` is a matrix of shape ``(Nm, Nm)`` indicating allowed nonzero elements in ``H``, and ``gtmpl`` is a matrix of shape ``(Ne, Nm)`` for ``g``.
+In both templates, any non-zero value indicates an allowed element, while 0 indicates a disallowed element.
 
 .. code-block:: python
 
@@ -130,14 +170,15 @@ By default, the fitter constrains eigenvalues of H to be within the frequency ra
 Logarithmic Fitting
 ~~~~~~~~~~~~~~~~~~~
 
-For spectral densities spanning many orders of magnitude, logarithmic fitting can be more effective:
+For spectral densities spanning many orders of magnitude, logarithmic fitting can be more effective, especially if you need to capture both small and large features accurately.
+This currently only works for the single-emitter case (Ne=1):
 
 .. code-block:: python
 
     # Note: Only works for single emitter (Ne=1)
     fitter = spectral_density_fitter(ω, J, Nm, fitlog=True)
 
-This minimizes the error in log-space: ``||log(J_fit) - log(J_target)||`` instead of ``||J_fit - J_target||``.
+This minimizes the error in log-space: :math:`||\log(J_\mathrm{fit}) - \log(J_\mathrm{target})||` instead of :math:`||J_\mathrm{fit} - J_\mathrm{target}||`.
 
 GPU Acceleration
 ~~~~~~~~~~~~~~~~

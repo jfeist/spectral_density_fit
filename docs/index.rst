@@ -12,7 +12,6 @@ Welcome to spectral_density_fit's documentation!
    :caption: Contents:
 
    installation
-   quickstart
    user_guide
    api_reference
    examples
