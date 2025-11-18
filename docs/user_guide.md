@@ -21,11 +21,11 @@ Without this configuration, you will receive a runtime warning, and fitting accu
 
 The package fits an arbitrary spectral density $J(\omega)$ with a few-mode model described by:
 
-- A real symmetric coupling matrix `H` (of size `Nm x Nm`)
+- A real symmetric Hamiltonian `H` (of size `Nm x Nm`)
 - Decay rates `κ` (positive real vector of size `Nm`)
 - A coupling matrix `g` (of size `Ne x Nm`)
 
-The complex symmetric effective coupling matrix is $H_{\text{eff}} = H - \frac{i}{2} \mathrm{diag}(\kappa)$.
+The complex symmetric effective Hamiltonian is $H_{\text{eff}} = H - \frac{i}{2} \mathrm{diag}(\kappa)$.
 
 The spectral density is then computed as:
 
@@ -60,7 +60,7 @@ Nm = 1
 fitter = spectral_density_fitter(ω, J_target, Nm)
 
 # Initialize with reasonable guesses
-H_init = np.array([[1.9]])   # Coupling matrix with resonance frequency
+H_init = np.array([[1.9]])   # Hamiltonian with resonance frequency
 κ_init = np.array([0.3])     # Decay rate
 g_init = np.array([[0.2]])   # Coupling strength
 ps0 = fitter.Hκg_to_ps(H_init, κ_init, g_init)
@@ -75,7 +75,7 @@ H, κ_fit, g_fit = fitter.ps_to_Hκg(ps_opt)
 # Compute the fit quality
 error = np.linalg.norm(J_fit - J_target[None, None, :])
 print(f"Fit error: {error:.6e}")
-print(f"Real symmetric coupling matrix H: {H}")
+print(f"Hamiltonian H: {H}")
 print(f"Decay rates κ: {κ_fit}")
 print(f"Coupling g: {g_fit}")
 ```
@@ -84,11 +84,11 @@ print(f"Coupling g: {g_fit}")
 
 The fitter returns a parameter vector `ps_opt` that encodes the physical parameters:
 
-- `H`: Real symmetric coupling matrix of shape `(Nm, Nm)`
+- `H`: Real symmetric Hamiltonian of shape `(Nm, Nm)`
 - `κ`: Decay rates (positive real values) of shape `(Nm,)`
 - `g`: Coupling matrix of shape `(Ne, Nm)`
 
-The effective coupling matrix used in the spectral density calculation is $H_\mathrm{eff} = H - \frac{i}{2} \mathrm{diag}(\kappa)$, which is complex symmetric.
+The effective Hamiltonian used in the spectral density calculation is $H_\mathrm{eff} = H - \frac{i}{2} \mathrm{diag}(\kappa)$, which is complex symmetric.
 
 You can visualize the results with matplotlib:
 
@@ -249,7 +249,7 @@ There are two methods for computing spectral densities directly:
 from spectral_density_fit import Jmod
 import jax.numpy as jnp
 
-# Create effective coupling matrix
+# Create effective Hamiltonian
 H = ...  # Complex symmetric matrix
 κ = ...  # Decay rates
 g = ...  # Coupling
