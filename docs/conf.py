@@ -23,6 +23,14 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
     'sphinx.ext.mathjax',
+    "myst_parser",
+]
+
+myst_enable_extensions = [
+    "amsmath",
+    "deflist",
+    "dollarmath",
+    "colon_fence",
 ]
 
 templates_path = ['_templates']

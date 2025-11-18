@@ -29,6 +29,7 @@ docs = [
     "sphinx>=7.0",
     "sphinx-rtd-theme>=2.0",
     "sphinx-autobuild>=2021.3.14",
+    "myst-parser>=3.0.1"
 ]
 
 [tool.pytest.ini_options]
