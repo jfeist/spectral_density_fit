@@ -4,14 +4,107 @@ import warnings
 import jax
 import jax.numpy as jnp
 from jax import grad, jacobian, jit
-from functools import partial
 
 from .spectral_densities import Jmod_naive, _non_jitted_Jmod
 
 
 class spectral_density_fitter(nlopt.opt):
-    # version that allows to pass "templates" for H and g that
-    # indicate where they are allowed to be nonzero in the fit
+    """Fit arbitrary spectral densities with a few-mode model.
+
+    This class implements the fitting procedure from I. Medina, F. J. García-Vidal,
+    A. I. Fernández-Domínguez, and J. Feist, Phys. Rev. Lett. 126, 093601 (2021),
+    https://doi.org/10.1103/PhysRevLett.126.093601, to represent a spectral density
+    J(ω) by a few-mode model with real symmetric Hamiltonian H, decay rates κ, and 
+    coupling g. The effective Hamiltonian is H_eff = H - 0.5j * diag(κ).
+
+    The fitter optimizes the parameters of H, κ, and g to minimize the difference 
+    between the target spectral density and the model spectral density.
+
+    Parameters
+    ----------
+    ω : array-like
+        A 1D array of frequencies at which the spectral density is provided.
+    J : array-like
+        The target spectral density. Can be:
+        
+        - 1D array of shape (Nω,) for a single emitter
+        - 3D array of shape (Ne, Ne, Nω) for multiple emitters
+        
+    Hgtmpl : int or tuple
+        Template for the Hamiltonian and coupling. Can be:
+        
+        - An integer Nm specifying the number of modes (all elements allowed to vary)
+        - A tuple (Htmpl, gtmpl) of boolean arrays specifying which elements can be nonzero:
+        
+          - Htmpl: shape (Nm, Nm), template for effective Hamiltonian
+          - gtmpl: shape (Ne, Nm), template for coupling matrix
+    λlims : tuple or None, optional
+        Limits for the eigenvalues of the Hamiltonian. If None (default), uses
+        (ω.min(), ω.max()). Set to False to disable eigenvalue constraints.
+    fitlog : bool, optional
+        If True, minimize the error in log-space instead of linear space.
+        Only supported for single emitter (Ne=1). Default is False.
+    diagonalize : bool or None, optional
+        Whether to use diagonalization method (True) or direct inversion (False).
+        If None (default), automatically chooses based on device: True for CPU,
+        False for GPU.
+    device : jax.Device or None, optional
+        JAX device to use for computations. If None (default), chooses based on
+        diagonalize parameter.
+    algorithm : nlopt algorithm, optional
+        NLopt optimization algorithm to use. Default is nlopt.LD_CCSAQ
+        (gradient-based CCSAQ algorithm).
+
+    Attributes
+    ----------
+    ω : jax.numpy.ndarray
+        Frequency array
+    J : jax.numpy.ndarray
+        Target spectral density
+    Ne : int
+        Number of emitters
+    Nm : int
+        Number of modes
+    Htmpl : jax.numpy.ndarray
+        Template for Hamiltonian
+    gtmpl : jax.numpy.ndarray
+        Template for coupling
+    Nps : int
+        Number of fit parameters
+    Hκg_to_ps : callable
+        Function to convert (H, κ, g) to parameter vector
+    ps_to_Hκg : callable
+        Function to convert parameter vector to (H, κ, g)
+    Jfun : callable
+        Function to compute spectral density from parameters
+    obj_fun : callable
+        Objective function for optimization
+
+    Examples
+    --------
+    >>> import jax
+    >>> import numpy as np
+    >>> from spectral_density_fit import spectral_density_fitter
+    >>> 
+    >>> # Enable 64-bit precision for better accuracy
+    >>> jax.config.update("jax_enable_x64", True)
+    >>> 
+    >>> # Create frequency array and target spectral density
+    >>> ω = np.linspace(-3, 3, 100)
+    >>> J_target = 0.1 / (ω**2 + 0.1**2)  # Lorentzian spectral density
+    >>> 
+    >>> # Fit with 3 modes
+    >>> fitter = spectral_density_fitter(ω, J_target, 3)
+    >>> 
+    >>> # Initial guess (random)
+    >>> ps0 = np.random.normal(size=fitter.Nps)
+    >>> 
+    >>> # Optimize
+    >>> ps_opt = fitter.optimize(ps0)
+    >>> 
+    >>> # Get fitted spectral density
+    >>> J_fit = fitter.Jfun(ω, ps_opt)
+    """
     def __init__(self, ω, J, Hgtmpl, λlims=None, fitlog=False, diagonalize=None, device=None, algorithm=nlopt.LD_CCSAQ):
         if not jax.config.jax_enable_x64:
             warnings.warn(
@@ -79,6 +172,42 @@ class spectral_density_fitter(nlopt.opt):
 
 
 def make_jax_closures(ω, J, Htmpl, gtmpl, fitlog, Jmodfun, device):
+    """Create JAX-compiled closures for the fitting procedure.
+
+    This function creates the necessary functions for converting between
+    the parameter space used by the optimizer and the physical parameters
+    (Hamiltonian, decay rates, coupling), as well as the objective function.
+
+    Parameters
+    ----------
+    ω : jax.numpy.ndarray
+        Frequency array
+    J : jax.numpy.ndarray
+        Target spectral density
+    Htmpl : jax.numpy.ndarray
+        Template for Hamiltonian (indicates which elements can be nonzero)
+    gtmpl : jax.numpy.ndarray
+        Template for coupling (indicates which elements can be nonzero)
+    fitlog : bool
+        If True, minimize error in log-space
+    Jmodfun : callable
+        Function to compute spectral density (Jmod or Jmod_naive)
+    device : jax.Device
+        JAX device to use for computations
+
+    Returns
+    -------
+    Nps : int
+        Number of fit parameters
+    Hκg_to_ps : callable
+        Function to convert (H, κ, g) to parameter vector
+    ps_to_Hκg : callable
+        Function to convert parameter vector to (H, κ, g)
+    Jfun : callable
+        Function to compute spectral density from parameters
+    obj_fun : callable
+        Objective function for NLopt optimization (returns error and gradient)
+    """
     with jax.default_device(device):
         Ne, Nm = gtmpl.shape
 
@@ -144,6 +273,23 @@ def make_jax_closures(ω, J, Htmpl, gtmpl, fitlog, Jmodfun, device):
 
 
 def make_jax_constraints(λmin, λmax, ps_to_Hκg):
+    """Create constraint functions for NLopt to keep eigenvalues within bounds.
+
+    Parameters
+    ----------
+    λmin : float
+        Minimum allowed eigenvalue
+    λmax : float
+        Maximum allowed eigenvalue
+    ps_to_Hκg : callable
+        Function to convert parameter vector to (H, κ, g)
+
+    Returns
+    -------
+    nlopt_constraints : callable
+        Constraint function for NLopt that ensures eigenvalues of H are
+        within [λmin, λmax]
+    """
     @jit
     def f_constraints(ps):
         "constraint function that forces eigenvalues to be within the range [λmin,λmax]"

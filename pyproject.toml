@@ -9,7 +9,7 @@ readme = "README.md"
 license = {file = "LICENSE"}
 classifiers = ["License :: OSI Approved :: MIT License"]
 dynamic = ["version", "description"]
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 dependencies = [
     "numpy >=1.15",
     "jax >=0.3",
@@ -24,6 +24,12 @@ dev = [
     "pytest>=7.4.4",
     "pytest-benchmark>=4.0.0",
     "ruff>=0.11.2",
+]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=2.0",
+    "sphinx-autobuild>=2021.3.14",
+    "myst-parser>=3.0.1"
 ]
 
 [tool.pytest.ini_options]
