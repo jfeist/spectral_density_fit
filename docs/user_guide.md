@@ -25,13 +25,13 @@ The package fits an arbitrary spectral density $J(\omega)$ with a few-mode model
 - Decay rates `κ` (positive real vector of size `Nm`)
 - A coupling matrix `g` (of size `Ne x Nm`)
 
-The complex symmetric effective Hamiltonian is $H_{\text{eff}} = H - \frac{i}{2} \mathrm{diag}(\kappa)$.
+The complex symmetric effective Hamiltonian is $\mathbf{H}_{\text{eff}} = \mathbf{H} - \frac{i}{2} \mathrm{diag}(\vec{\kappa})$.
 
 The spectral density is then computed as:
 
-$$
-J(\omega) = \frac{1}{\pi} g^\dagger \operatorname{Im}\left[\frac{1}{H_{\text{eff}} - \omega I}\right] g
-$$
+\begin{equation*}
+J(\omega) = \frac{1}{\pi} \mathbf{g} \operatorname{Im}\left[\frac{1}{\mathbf{H}_{\text{eff}} - \omega I}\right] \mathbf{g}^\dagger
+\end{equation*}
 
 ## Quick Start Example
 
@@ -88,7 +88,7 @@ The fitter returns a parameter vector `ps_opt` that encodes the physical paramet
 - `κ`: Decay rates (positive real values) of shape `(Nm,)`
 - `g`: Coupling matrix of shape `(Ne, Nm)`
 
-The effective Hamiltonian used in the spectral density calculation is $H_\mathrm{eff} = H - \frac{i}{2} \mathrm{diag}(\kappa)$, which is complex symmetric.
+The effective Hamiltonian used in the spectral density calculation is $\mathbf{H}_{\text{eff}} = \mathbf{H} - \frac{i}{2} \mathrm{diag}(\vec{\kappa})$, which is complex symmetric.
 
 You can visualize the results with matplotlib:
 
@@ -167,7 +167,7 @@ This currently only works for the single-emitter case (Ne=1):
 fitter = spectral_density_fitter(ω, J, Nm, fitlog=True)
 ```
 
-This minimizes the error in log-space: $||\log(J_\mathrm{fit}) - \log(J_\mathrm{target})||$ instead of $||J_\mathrm{fit} - J_\mathrm{target}||$.
+This minimizes the error in log-space: $\|\log(J_\mathrm{fit}) - \log(J_\mathrm{target})\|$ instead of $\|J_\mathrm{fit} - J_\mathrm{target}\|$.
 
 ### GPU Acceleration
 
