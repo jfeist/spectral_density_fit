@@ -37,6 +37,8 @@ html_static_path = ['_static']
 # Copy .nojekyll file to the build directory for GitHub Pages
 html_extra_path = ['.nojekyll']
 
+latex_engine = "xelatex"
+
 # Napoleon settings for NumPy-style docstrings
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True

@@ -13,8 +13,8 @@ Welcome to spectral_density_fit's documentation!
 
    installation
    user_guide
-   api_reference
    examples
+   api_reference
 
 Indices and tables
 ==================

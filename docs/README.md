@@ -33,8 +33,8 @@ The built documentation will be in `_build/html/`. Open `_build/html/index.html`
 - `index.rst` - Main documentation page with table of contents
 - `installation.rst` - Installation instructions
 - `user_guide.rst` - Comprehensive user guide covering all features
-- `api_reference.rst` - API documentation (auto-generated from docstrings)
 - `examples.rst` - Detailed examples for various use cases
+- `api_reference.rst` - API documentation (auto-generated from docstrings)
 - `conf.py` - Sphinx configuration
 
 ## Cleaning Build Files
